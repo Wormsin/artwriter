@@ -41,9 +41,9 @@ def read_facts(skip: int = 0, limit: int = 10, db: Session = Depends(get_db)):
     return crud.get_facts(db, skip=skip, limit=limit)
 
 @app.post("/facts", tags=["Facts"])
-def add_fact(fact: FactSchema, db: Session = Depends(get_db)):
-    new_fact = crud.create_fact(db, fact)
-    return {"id": new_fact.id, "title": new_fact.title}
+def add_facts(facts: List[FactSchema], db: Session = Depends(get_db)):
+    new_facts = crud.create_facts(db, facts)
+    return [{"id": fact.id, "title": fact.title, "source_url":fact.source_url} for fact in new_facts]
 
 
 if __name__=="__main__":

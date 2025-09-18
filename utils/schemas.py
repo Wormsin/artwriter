@@ -19,3 +19,11 @@ class ParameterSchema(BaseModel):
     theme: str
     sources: Optional[str] = "любые достоверные источники"
     limit: Optional[int] = None
+
+
+class ScriptStructureSchema(BaseModel):
+    topic: str
+    title: str
+    series_number: int
+    summary: str
+    fact_ids: List[int] = []

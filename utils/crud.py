@@ -49,3 +49,43 @@ def get_facts_by_parameter(db: Session, parameter_id: int):
 
 def get_facts(db: Session, skip: int = 0, limit: int = 100):
     return db.query(models.Fact).offset(skip).limit(limit).all()
+
+def get_facts_by_title(db: Session, title: int):
+    return db.query(models.Fact).filter(models.Fact.title == title).all()
+
+# -------- Script Structures --------
+def create_script_structures(db: Session, structures_data: List[schemas.ScriptStructureSchema]):
+    created_structures = []
+    for structure_data in structures_data:
+        db_structure = models.ScriptStructure(
+            topic=structure_data.topic,
+            title = structure_data.title,
+            series_number=structure_data.series_number,
+            summary = structure_data.summary
+        )
+        # Привязываем факты через fact_ids из структуры
+        if structure_data.fact_ids:
+            facts = db.query(models.Fact).filter(models.Fact.id.in_(structure_data.fact_ids)).all()
+            db_structure.facts = facts
+        db.add(db_structure)
+        created_structures.append(db_structure)
+    db.commit()
+    for structure in created_structures:
+        db.refresh(structure)
+    return created_structures
+
+def get_script_structures(db: Session, skip: int = 0, limit: int = 10):
+    return db.query(models.ScriptStructure).offset(skip).limit(limit).all()
+
+def get_structure_by_topic(db: Session, topic: str):
+    return db.query(models.ScriptStructure).filter(models.ScriptStructure.topic == topic).all()
+
+def get_structure_by_topic_and_series_number(db: Session, topic: str, series_num: int):
+    return (
+        db.query(models.ScriptStructure)
+        .filter(
+            models.ScriptStructure.topic == topic,
+            models.ScriptStructure.series_number == series_num
+        )
+        .all()
+    )

@@ -1,10 +1,15 @@
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI, Depends, UploadFile
 import uvicorn
 from sqlalchemy.orm import Session
 from utils.db import SessionLocal, engine, Base
 from utils import crud
-from utils.schemas import FactSchema, ParameterSchema, ScriptStructureSchema
+from utils.schemas import ReportSchema, DeepResearchSchema
 from typing import List
+import shutil
+from utils.openai_api import run_deep_research
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # -------- FastAPI App --------
 app = FastAPI()
@@ -18,51 +23,39 @@ def get_db():
         db.close()
 
 
-# -------- Parameters Endpoints --------
-@app.post("/parameters", tags=["Facts Filters"])
-def add_parameters(param: ParameterSchema, db: Session = Depends(get_db)):
-    return crud.create_facts_parameter(db, param)
+# -------- Reports Endpoints --------
+@app.get("/reports/{topic}", response_model=List[ReportSchema], tags=["Reports"])
+def read_reports_by_topic(topic:str, db: Session = Depends(get_db)):
+    return crud.get_reports_by_topic(db, topic)
 
-@app.get("/parameters", response_model=List[ParameterSchema], tags=["Facts Filters"])
-def read_parameters(skip: int = 0, limit: int = 10, db: Session = Depends(get_db)):
-    return crud.get_facts_parameters(db, skip=skip, limit=limit)
+@app.get("/reports", tags=["Reports"])
+def read_reports(skip: int = 0, limit: int = 10, db: Session = Depends(get_db)):
+    return crud.get_reports(db, skip=skip, limit=limit)
 
-@app.get("/parameters/{parameter_id}", response_model=ParameterSchema, tags=["Facts Filters"])
-def read_parameter(parameter_id: int, db: Session = Depends(get_db)):
-    return crud.get_facts_parameter(db, parameter_id)
+@app.get("/reports/{topic}/{area}", tags=["Reports"])
+def read_reports_by_topic_area(topic: str, area:str, db: Session = Depends(get_db)):
+    return crud.get_reports_by_topic_area(db, topic, area)
 
-# -------- Facts Endpoints --------
-@app.get("/facts/by-parameter/{parameter_id}", response_model=List[FactSchema], tags=["Facts"])
-def read_facts_by_parameter(parameter_id: int, db: Session = Depends(get_db)):
-    return crud.get_facts_by_parameter(db, parameter_id)
+@app.post("/reports", tags=["Reports"])
+def add_reports(reports: List[ReportSchema], db: Session = Depends(get_db)):
+    new_reports = crud.create_reports(db, reports)
+    return [{"id": report.id, "topic": report.topic, "area":report.area} for report in new_reports]
 
-@app.get("/facts", tags=["Facts"])
-def read_facts(skip: int = 0, limit: int = 10, db: Session = Depends(get_db)):
-    return crud.get_facts(db, skip=skip, limit=limit)
-
-@app.get("/facts/by-title/{title}", tags=["Facts"])
-def read_facts_by_title(title: str, db: Session = Depends(get_db)):
-    return crud.get_facts_by_title(db, title)
-
-@app.post("/facts", tags=["Facts"])
-def add_facts(facts: List[FactSchema], db: Session = Depends(get_db)):
-    new_facts = crud.create_facts(db, facts)
-    return [{"id": fact.id, "title": fact.title, "source_url":fact.source_url} for fact in new_facts]
+@app.post("/upload_reports", tags=["Reports"])
+async def upload(file: UploadFile):
+    with open(f"./reports/{file.filename}", "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+    return {"filename": file.filename, "status": "saved"}
 
 
-# -------- Script Structure Endpoints --------
-@app.post("/script-structures", tags=["Script Structures"])
-def add_script_structures(structures: List[ScriptStructureSchema], db: Session = Depends(get_db)):
-    new_structures = crud.create_script_structures(db, structures)
-    return [{"id": structure.id, "topic": structure.topic, "series_number":structure.series_number, "source_url":structure.facts[0].source_url} for structure in new_structures]
+# -------- Openai Endpoints --------
+@app.post("/deep_research", tags=["Deep Research"])
+def create_report(dr_input: DeepResearchSchema,  db: Session = Depends(get_db)):
+    return run_deep_research(topic = dr_input.topic,
+                            prompt = dr_input.prompt,
+                            output_docx_path=dr_input.file_url)
+    
 
-@app.get("/script-structures/{topic}", response_model=List[ScriptStructureSchema], tags=["Script Structures"])
-def read_structure_by_topic(topic: str, db: Session = Depends(get_db)):
-    return crud.get_structure_by_topic(db, topic)
-
-@app.get("/script-structures/{topic}/{series}", response_model=List[ScriptStructureSchema], tags=["Script Structures"])
-def read_structure_by_topic_series(topic: str, series: int, db: Session = Depends(get_db)):
-    return crud.get_structure_by_topic_and_series_number(db, topic, series)
 
 
 if __name__=="__main__":

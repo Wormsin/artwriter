@@ -1,4 +1,6 @@
+from urllib import response
 from fastapi import FastAPI, Depends, UploadFile
+from sqlalchemy import null
 import uvicorn
 from sqlalchemy.orm import Session
 from utils.db import SessionLocal, engine, Base
@@ -8,6 +10,7 @@ from typing import List
 import shutil
 from utils.openai_api import run_deep_research
 from dotenv import load_dotenv
+import os
 
 load_dotenv()
 
@@ -51,9 +54,15 @@ async def upload(file: UploadFile):
 # -------- Openai Endpoints --------
 @app.post("/deep_research", tags=["Deep Research"])
 def create_report(dr_input: DeepResearchSchema,  db: Session = Depends(get_db)):
-    return run_deep_research(topic = dr_input.topic,
+    os.makedirs(f"./reports/{dr_input.topic}", exist_ok=True)
+    response =  run_deep_research(topic = dr_input.topic,
                             prompt = dr_input.prompt,
                             output_docx_path=dr_input.file_url)
+    if response.error == null:
+        report = ReportSchema(**dr_input.model_dump())
+        return crud.create_reports(db, [report])
+    else:
+        return response
     
 
 

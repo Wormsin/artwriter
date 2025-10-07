@@ -11,7 +11,7 @@ if not GEMINI_API_KEY:
     raise ValueError("Set GEMINI_API_KEY environment variable")
 
 client = genai.Client(api_key=GEMINI_API_KEY)
-MODEL_NAME = 'gemini-2.5-flash-lite' 
+MODEL_NAME = 'gemini-2.5-flash' 
 
 def upload_files(file_paths):
     uploaded = []
@@ -75,7 +75,7 @@ def call_llm(prompt, files=None, model_name=MODEL_NAME,
     )
     return response.text
 
-def structured_call_llm(prompt,structure, files=None, model_name=MODEL_NAME, temperature=0.7):
+def structured_call_llm(prompt,structure, files=None, model_name=MODEL_NAME, temperature=0.7, max_output_tokens=4096):
     content = [prompt]
     if files:
         content.extend(files)

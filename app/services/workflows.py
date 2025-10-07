@@ -124,24 +124,33 @@ def build_script_structure(topic_name, num_series):
     '''
     return output_file_json
 
-def write_script_text(topic_name):
+def write_script_text(topic_name, max_output_tokens=4049):
     """Этап 5: Написание текста сценария."""
     output_file_json=f"{topic_name}/СЦЕНАРИИ/scenario.json"
+    output_file_txt=f"{topic_name}/СЦЕНАРИИ/scenario.txt"
 
-    folder = Path(f"{topic_name}/БД")
-    file_paths = [str(file.resolve()) for file in folder.iterdir() if file.is_file()]
-    file_paths.append(f"{topic_name}/ФАКТЫ/db_facts_checked.txt")
-    file_paths.append(f"{topic_name}/СТРУКТУРА/script_structure.txt")
+    #folder = Path(f"{topic_name}/БД")
+    #file_paths = [str(file.resolve()) for file in folder.iterdir() if file.is_file()]
+    #file_paths.append(f"{topic_name}/ФАКТЫ/db_facts_checked.txt")
+    #file_paths.append(f"{topic_name}/СТРУКТУРА/script_structure.txt")
 
-    uploaded_files = upload_files(file_paths)
+    #uploaded_files = upload_files(file_paths)
+    uploaded_files = None
     prompt = get_stage5_prompt()
-    response = structured_call_llm(prompt, files=uploaded_files, structure=list[ScenarioStructure])
+    response = structured_call_llm(prompt, files=uploaded_files, structure=list[ScenarioStructure], max_output_tokens=max_output_tokens)
 
-    scripts: list[ScenarioStructure] = response.parsed
-    scripts = [script.model_dump() for script in scripts]
-    save_json(scripts, output_file_json)
-    print(f"Структура сценария сохранена в {output_file_json}")
+    print(response)
+    try:
+        scripts: list[ScenarioStructure] = response.parsed
+        scripts = [script.model_dump() for script in scripts]
+        save_json(scripts, output_file_json)
+        print(f"Структура сценария сохранена в {output_file_json}")
+        scenario_to_docx(topic_name=topic_name)
+    except TypeError as e:
+        print(f"❌ Ошибка NoneType: Обнаружено, что 'response.parsed' вернул None. Запускаю сохранение сырого текста.")
+        save_text(response.text, output_file_txt)
+    except Exception as e:
+        print(f"⚠️ Произошла другая критическая ошибка при обработке или сохранении: {e}")
 
-    scenario_to_docx(topic_name=topic_name)
 
     return output_file_json

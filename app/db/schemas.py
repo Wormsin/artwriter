@@ -9,3 +9,15 @@ class ReportSchema(BaseModel):
 
 class DeepResearchSchema(ReportSchema):
     prompt: str
+
+class ProjectInitialization(BaseModel):
+    topic_name: str
+
+class DBExpansion(ProjectInitialization):
+    use_websearch: bool
+
+class ScenarioStructureSchema(ProjectInitialization):
+    num_series: int
+
+class ScenarioSchema(ProjectInitialization):
+    max_output_tokens: int

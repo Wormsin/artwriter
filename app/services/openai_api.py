@@ -85,3 +85,15 @@ def run_deep_research(
 
     
     return response
+
+
+def call_openai(prompt: str, model: str = "gpt-4.1-mini", max_tokens: int = 200) -> str:
+    client = OpenAI()
+
+    response = client.chat.completions.create(
+        model=model,
+        messages=[{"role": "user", "content": prompt}],
+        max_tokens=max_tokens
+    )
+
+    return response.choices[0].message.content

@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 import uvicorn
 from db.db import Base, engine
-from api import db_routes, disk_routes 
+from api import db_routes, disk_routes, llm_routes
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -11,6 +11,7 @@ Base.metadata.create_all(bind=engine)
 
 app.include_router(db_routes.router_reports)
 app.include_router(disk_routes.router_disk)
+app.include_router(llm_routes.router_llm_workflows)
 
 #test route
 @app.get("/")

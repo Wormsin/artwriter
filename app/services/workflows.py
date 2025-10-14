@@ -35,10 +35,9 @@ def save_json(obj, output_file):
     with open(output_file, 'w', encoding='utf-8') as f:
         json.dump(obj, f, ensure_ascii=False, indent=2)
 
-def scenario_to_docx(topic_name):
-    output_dir = f"{topic_name}/СЦЕНАРИИ"
+def scenario_to_docx(output_dir):
     output_path = Path(output_dir)
-    input_file = f"{topic_name}/СЦЕНАРИИ/scenario.json"
+    input_file = f"{output_dir}/scenario.json"
     with open(input_file, "r", encoding="utf-8") as f:
         data = json.load(f)
 
@@ -64,31 +63,36 @@ def scenario_to_docx(topic_name):
         file_name = f"Серия_{serie['serie_number']}_{serie['serie_name'].replace(' ', '_')}.docx"
         doc.save(output_path / file_name)
         print(f"Создан файл: {file_name}")
+        
 
-def expand_database(topic_name, use_websearch=False):
-    output_file = f"{topic_name}/ФАКТЫ/db_extension.txt"
-    folder = Path(f"{topic_name}/БД")
-    file_paths = [str(file.resolve()) for file in folder.iterdir() if file.is_file()]
+def expand_database(topic_path):
+    folder_path = Path(topic_path)
+    folder_path_facts = folder_path / "ФАКТЫ"
+    folder_path_facts.mkdir(parents=True, exist_ok=True)
+    folder_path_bd = folder_path / "БД"
+    output_file = folder_path_facts / "db_extension.txt"
+
+    file_paths = [str(file.resolve()) for file in folder_path_bd.iterdir() if file.is_file()]
     uploaded_files = upload_files(file_paths)
-    prompt = get_stage1_prompt(use_websearch)
-    response = call_llm(prompt, files=uploaded_files, web_search=use_websearch)
+    prompt = get_stage1_prompt()
+    response = call_llm(prompt, files=uploaded_files)
     save_text(response, output_file)
     print(f"Расширенная БД сохранена в {output_file}")
     return output_file
 
-def find_connections(topic_name):
-    output_file = f"{topic_name}/ФАКТЫ/db_facts.txt"
-    file_path = f"{topic_name}/ФАКТЫ/db_extension.txt"
+def find_connections(topic_path):
+    output_file = f"{topic_path}/ФАКТЫ/db_facts.txt"
+    file_path = f"{topic_path}/ФАКТЫ/db_extension.txt"
     uploaded_files = upload_small_file(file_path)
     prompt = get_stage2_prompt()
-    response = call_llm(prompt, files=uploaded_files, web_search=True, thinking=True)
+    response = call_llm(prompt, files=uploaded_files, thinking=True)
     save_text(response, output_file)
     print(f"Гипотезы сохранены в {output_file}")
     return output_file
 
-def check_hypotheses(topic_name):
-    hypotheses_file = f"{topic_name}/ФАКТЫ/db_facts.txt"
-    output_file = f"{topic_name}/ФАКТЫ/db_facts_checked.txt"
+def check_hypotheses(topic_path):
+    hypotheses_file = f"{topic_path}/ФАКТЫ/db_facts.txt"
+    output_file = f"{topic_path}/ФАКТЫ/db_facts_checked.txt"
     uploaded_files = upload_small_file(hypotheses_file)
     prompt = get_stage3_prompt()
     response = call_llm(prompt, files=uploaded_files, web_search=True, thinking=True)
@@ -96,13 +100,15 @@ def check_hypotheses(topic_name):
     print(f"Проверенные гипотезы сохранены в {output_file}")
     return output_file
 
-def build_script_structure(topic_name, num_series):
-    output_file_json = f"{topic_name}/СТРУКТУРА/script_structure.json"
-    output_file_txt = f"{topic_name}/СТРУКТУРА/script_structure.txt"
+def build_script_structure(topic_path, num_series):
+    output_file_json = f"{topic_path}/СТРУКТУРА/script_structure.json"
+    output_file_txt = f"{topic_path}/СТРУКТУРА/script_structure.txt"
+    folder_path_structure = Path(topic_path)/ "СТРУКТУРА"
+    folder_path_structure.mkdir(parents=True, exist_ok=True)
 
-    folder = Path(f"{topic_name}/БД")
+    folder = Path(f"{topic_path}/БД")
     file_paths = [str(file.resolve()) for file in folder.iterdir() if file.is_file()]
-    file_paths.append(f"{topic_name}/ФАКТЫ/db_facts_checked.txt")
+    file_paths.append(f"{topic_path}/ФАКТЫ/db_facts_checked.txt")
 
     uploaded_files = upload_files(file_paths)
     prompt = get_stage4_prompt(num_series)
@@ -124,10 +130,11 @@ def build_script_structure(topic_name, num_series):
     '''
     return output_file_json
 
-def write_script_text(topic_name, max_output_tokens=4049):
-    """Этап 5: Написание текста сценария."""
-    output_file_json=f"{topic_name}/СЦЕНАРИИ/scenario.json"
-    output_file_txt=f"{topic_name}/СЦЕНАРИИ/scenario.txt"
+def write_script_text(topic_path, max_output_tokens=4049):
+    output_file_json=f"{topic_path}/СЦЕНАРИЙ/scenario.json"
+    output_file_txt=f"{topic_path}/СЦЕНАРИЙ/scenario.txt"
+    folder_path_scenario = Path(topic_path)/ "СЦЕНАРИЙ"
+    folder_path_scenario.mkdir(parents=True, exist_ok=True)
 
     #folder = Path(f"{topic_name}/БД")
     #file_paths = [str(file.resolve()) for file in folder.iterdir() if file.is_file()]
@@ -145,12 +152,11 @@ def write_script_text(topic_name, max_output_tokens=4049):
         scripts = [script.model_dump() for script in scripts]
         save_json(scripts, output_file_json)
         print(f"Структура сценария сохранена в {output_file_json}")
-        scenario_to_docx(topic_name=topic_name)
+        scenario_to_docx(f"{topic_path}/СЦЕНАРИЙ")
     except TypeError as e:
         print(f"❌ Ошибка NoneType: Обнаружено, что 'response.parsed' вернул None. Запускаю сохранение сырого текста.")
         save_text(response.text, output_file_txt)
     except Exception as e:
         print(f"⚠️ Произошла другая критическая ошибка при обработке или сохранении: {e}")
-
 
     return output_file_json

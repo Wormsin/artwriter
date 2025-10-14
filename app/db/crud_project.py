@@ -1,9 +1,11 @@
 import os
 import shutil
-from typing import Literal, Optional
+from typing import Literal, Optional, List, Dict
 from db.schemas import ProjectInitialization
 from db.models import Project, ProjectAccess
 from sqlalchemy.orm import Session
+from pathlib import Path
+from fastapi import UploadFile
 
 
 PROJECTS_ROOT_DIR = "projects_root"
@@ -151,3 +153,41 @@ def get_access_level(db: Session, project_id: int, user_id: int) -> Optional[str
     
     # Если не владелец и нет записи о доступе
     return None
+
+
+async def save_reports_to_project(
+    folder_path: str,
+    project_id: int, 
+    uploaded_files: List[UploadFile]
+) -> List[Dict]:
+    results = []
+    
+    target_dir = Path(folder_path) / "БД"
+    try:
+        target_dir.mkdir(parents=True, exist_ok=True)
+    except Exception as e:
+        raise Exception(f"Не удалось создать папку для проекта ID {project_id}: {e}")
+
+    for file in uploaded_files:
+        target_file_path = target_dir / file.filename
+        try:
+            contents = await file.read()
+            with open(target_file_path, "wb") as f:
+                f.write(contents)
+            await file.seek(0) 
+
+            results.append({
+                "filename": file.filename,
+                "location": str(target_file_path),
+                "status": "success"
+            })
+            
+        except Exception as e:
+            results.append({
+                "filename": file.filename,
+                "status": "failed",
+                "error": f"Ошибка сохранения: {e}"
+            })
+            raise Exception(f"Ошибка при сохранении файла {file.filename}: {e}")
+
+    return results

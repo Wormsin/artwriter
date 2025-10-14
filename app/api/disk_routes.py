@@ -28,11 +28,3 @@ def create_project_filesystem(topic_name: str):
         result =  yandex_api.create_folder(f"/{topic_name}/{folder}")
         results.append(result)
     return results
-
-@router_disk.post("/local/project")
-def create_local_project_filesystem(project: ProjectInitialization):
-    folders = ["БД", "ФАКТЫ", "СТРУКТУРА", "СЦЕНАРИИ"]
-    base_dir = Path(f"{project.topic_name}")
-    for folder in folders:
-        (base_dir / folder).mkdir(parents=True, exist_ok=True)
-    return {"status": "ok", "message": "Filesystem was created!"}

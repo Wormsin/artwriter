@@ -1,17 +1,20 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
 from sqlalchemy.orm import Session
 from db.db import get_db
 from db.auth_security import get_current_user 
 from db.schemas import UserCreate, ProjectInitialization, ProjectShare, ProjectResponse
 from db.models import User, Project
-from typing import List
+from typing import List, Annotated
+from pathlib import Path
 from db.crud_auth import get_user_by_username
+import os
 from db.crud_project import (
     create_user_project, 
     get_project_by_id,
     get_user_accessible_projects,
     add_project_access, 
-    get_access_level 
+    get_access_level,
+    save_reports_to_project
 )
 
 
@@ -52,7 +55,7 @@ def get_project_data(
     return project
 
 
-@router_db.get("/projects/my", response_model=List[ProjectResponse])
+@router_db.get("/myprojects", response_model=List[ProjectResponse])
 def list_my_projects(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -91,3 +94,30 @@ def share_project_access(
     )
     
     return {"message": f"Access level '{share_data.permission_level}' granted to {target_user.username}."}
+
+
+@router_db.post("/projects/{project_id}/upload-reports", status_code=status.HTTP_201_CREATED)
+async def upload_project_files_endpoint(
+    project_id: int, 
+    folder_path: Annotated[str, Form()], 
+    files: List[UploadFile] = File(...), 
+    current_user: User = Depends(get_current_user)
+):
+    if not files:
+        raise HTTPException(status_code=400, detail="No files uploaded.")
+    try:
+        results = await save_reports_to_project(
+            folder_path=folder_path,
+            project_id=project_id,
+            uploaded_files=files
+        )
+        return {
+            "project_id": project_id, 
+            "user_id": current_user.user_id, 
+            "results": results
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, 
+            detail=f"Не удалось завершить загрузку файлов: {e}"
+        )

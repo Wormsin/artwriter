@@ -37,11 +37,11 @@ class Token(BaseModel):
 class ProjectInitialization(BaseModel):
     topic_name: str
 
-class DBExpansion(ProjectInitialization):
-    use_websearch: bool
+class WorkflowSchema(BaseModel):
+    folder_path: str
 
-class ScenarioStructureSchema(ProjectInitialization):
+class ScenarioStructureSchema(WorkflowSchema):
     num_series: int
 
-class ScenarioSchema(ProjectInitialization):
+class ScenarioSchema(WorkflowSchema):
     max_output_tokens: int

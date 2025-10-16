@@ -220,7 +220,7 @@ def show_main_app():
             num_acts = st.number_input("Количесво серий:", min_value=1, step=1, format="%d" )
             if st.button("Сгенерировать Структуру", key='btn5'):
                 try:
-                    with st.spinner(f'Создаю структуру "{topic_name}"...'):
+                    with st.spinner(f'Создаю структуру "{st.session_state.active_project_folder}"...'):
                         result = generate_structure(st.session_state.jwt_token, st.session_state.active_project_folder, 
                                                     st.session_state.active_project_id, num_acts)
                         # Обработка успешного ответа

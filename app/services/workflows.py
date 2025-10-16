@@ -5,14 +5,16 @@ from pathlib import Path
 from pydantic import BaseModel
 from docx import Document
 from docx.shared import Pt
+from typing import Dict, List
 
 
 class ChapterStructure(BaseModel):
+    chapter_number: int
     chapter_name: str
     chapter_description: str
 
 class ChapterTextScructure(ChapterStructure):
-    text: str
+    text: str = ""
 
 class ScriptStructure(BaseModel):
     serie_number: int
@@ -48,7 +50,7 @@ def scenario_to_docx(output_dir):
 
         for chapter in serie["content"]:
             # Название главы
-            doc.add_heading(chapter["chapter_name"], level=1)
+            doc.add_heading(f"{chapter['chapter_number']}.   {chapter['chapter_name']}", level=1)
 
             # Описание главы (курсив)
             p_desc = doc.add_paragraph()
@@ -60,7 +62,7 @@ def scenario_to_docx(output_dir):
             p_text = doc.add_paragraph(chapter["text"])
             p_text.style = "Normal"
 
-        file_name = f"Серия_{serie['serie_number']}_{serie['serie_name'].replace(' ', '_')}.docx"
+        file_name = f"Серия_{serie['serie_number']}.docx"
         doc.save(output_path / file_name)
         print(f"Создан файл: {file_name}")
         
@@ -81,14 +83,30 @@ def expand_database(topic_path):
     return output_file
 
 def find_connections(topic_path):
-    output_file = f"{topic_path}/ФАКТЫ/db_facts.txt"
-    file_path = f"{topic_path}/ФАКТЫ/db_extension.txt"
-    uploaded_files = upload_small_file(file_path)
-    prompt = get_stage2_prompt()
-    response = call_llm(prompt, files=uploaded_files, thinking=True)
-    save_text(response, output_file)
+    output_folder = Path(topic_path) / "ФАКТЫ"
+
+    folder = Path(f"{topic_path}/БД")
+    file_paths = [str(file.resolve()) for file in folder.iterdir() if file.is_file()]
+    file_paths.append(f"{topic_path}/ФАКТЫ/db_extension.txt")
+    uploaded_files = upload_files(file_paths)
+
+    lens = 0
+    context = ''
+    while True:
+        lens+=1
+        prompt = get_stage2_prompt(lens_num=lens, context=context)
+        if prompt:
+            response = call_llm(prompt, files=uploaded_files, thinking=True)
+            context = response
+            output_file = output_folder / f"lens_{lens}_output.txt"
+            save_text(response, output_file)
+        else:
+            output_file = output_folder / "db_facts.txt"
+            save_text(response, output_file)
+            break
     print(f"Гипотезы сохранены в {output_file}")
     return output_file
+
 
 def check_hypotheses(topic_path):
     hypotheses_file = f"{topic_path}/ФАКТЫ/db_facts.txt"
@@ -99,6 +117,8 @@ def check_hypotheses(topic_path):
     save_text(response, output_file)
     print(f"Проверенные гипотезы сохранены в {output_file}")
     return output_file
+
+
 
 def build_script_structure(topic_path, num_series):
     output_file_json = f"{topic_path}/СТРУКТУРА/script_structure.json"
@@ -112,50 +132,81 @@ def build_script_structure(topic_path, num_series):
 
     uploaded_files = upload_files(file_paths)
     prompt = get_stage4_prompt(num_series)
-    response = structured_call_llm(prompt, files=uploaded_files, structure=list[ScriptStructure])
+    response = structured_call_llm(prompt, files=uploaded_files, structure=list[ScriptStructure],
+                                    max_output_tokens=65536)
 
     scripts: list[ScriptStructure] = response.parsed
     scripts = [script.model_dump() for script in scripts]
     save_json(scripts, output_file_json)
     save_text(response.text, output_file_txt)
     print(f"Структура сценария сохранена в {output_file_json}")
-
-    '''
-    output_folder = Path(f"{topic_name}/СТРУКТУРА")
-    for script in scripts:
-        serie_number = script["serie_number"]
-        file_name = f"serie_structure_{serie_number}.json"
-        file_path = output_folder / file_name
-        save_json(script, file_path)
-    '''
     return output_file_json
+
+
+
+def get_chapters_per_serie_from_file(file_path: str) -> Dict[int, int]:
+    file_path_obj = Path(file_path)
+    if not file_path_obj.exists():
+        raise FileNotFoundError(f"Файл не найден по пути: {file_path}")
+    try:
+        # 1. Считывание содержимого файла
+        with open(file_path_obj, 'r', encoding='utf-8') as f:
+            json_data_string = f.read()
+        # 2. Парсинг JSON-строки в список словарей
+        raw_data = json.loads(json_data_string)
+        # 3. Валидация и создание объектов Pydantic
+        # Если файл содержит список серий, парсим каждую
+        scenario_data: list[ScenarioStructure] = [
+            ScenarioStructure.model_validate(item) 
+            for item in raw_data
+        ]
+    except (json.JSONDecodeError, ValueError) as e:
+        raise ValueError(f"Ошибка валидации или некорректная структура JSON в файле: {e}")
+    # 4. Расчет итогового словаря Dict[int, int]
+    chapters_per_serie: Dict[int, int] = {}
+    for serie in scenario_data:
+        # Ключ: номер серии; Значение: длина списка content
+        chapters_per_serie[serie.serie_number] = len(serie.content)
+        
+    return chapters_per_serie, scenario_data
+
+
 
 def write_script_text(topic_path, max_output_tokens=4049):
     output_file_json=f"{topic_path}/СЦЕНАРИЙ/scenario.json"
-    output_file_txt=f"{topic_path}/СЦЕНАРИЙ/scenario.txt"
     folder_path_scenario = Path(topic_path)/ "СЦЕНАРИЙ"
     folder_path_scenario.mkdir(parents=True, exist_ok=True)
+    
+    folder_db = Path(topic_path) / "БД"
+    file_paths = [str(file.resolve()) for file in folder_db.iterdir() if file.is_file()]
+    file_paths.append(f"{topic_path}/ФАКТЫ/db_facts_checked.txt")
+    file_paths.append(f"{topic_path}/СТРУКТУРА/script_structure.txt")
+    uploaded_files = upload_files(file_paths)
+    #uploaded_files = None
 
-    #folder = Path(f"{topic_name}/БД")
-    #file_paths = [str(file.resolve()) for file in folder.iterdir() if file.is_file()]
-    #file_paths.append(f"{topic_name}/ФАКТЫ/db_facts_checked.txt")
-    #file_paths.append(f"{topic_name}/СТРУКТУРА/script_structure.txt")
+    chapters_per_serie, scenario_data = get_chapters_per_serie_from_file(f"{topic_path}/СТРУКТУРА/script_structure.json")
 
-    #uploaded_files = upload_files(file_paths)
-    uploaded_files = None
-    prompt = get_stage5_prompt()
-    response = structured_call_llm(prompt, files=uploaded_files, structure=list[ScenarioStructure], max_output_tokens=max_output_tokens)
-
-    print(response)
+    for s in chapters_per_serie:
+        for ch in range(1, chapters_per_serie[s]+1):
+            prompt = get_stage5_prompt(ser=s, ch=ch)
+            response = call_llm(prompt, files=uploaded_files)
+            for serie in scenario_data:
+                if serie.serie_number == s:
+                    target_serie = serie
+                    break
+            for chapter in target_serie.content:
+                if chapter.chapter_number == ch:
+                    target_chapter = chapter
+                    break
+            target_chapter.text = response
+    
     try:
-        scripts: list[ScenarioStructure] = response.parsed
-        scripts = [script.model_dump() for script in scripts]
+        scripts = [sd.model_dump() for sd in scenario_data]
         save_json(scripts, output_file_json)
         print(f"Структура сценария сохранена в {output_file_json}")
         scenario_to_docx(f"{topic_path}/СЦЕНАРИЙ")
     except TypeError as e:
         print(f"❌ Ошибка NoneType: Обнаружено, что 'response.parsed' вернул None. Запускаю сохранение сырого текста.")
-        save_text(response.text, output_file_txt)
     except Exception as e:
         print(f"⚠️ Произошла другая критическая ошибка при обработке или сохранении: {e}")
 

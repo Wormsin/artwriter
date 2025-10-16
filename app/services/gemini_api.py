@@ -83,7 +83,7 @@ def structured_call_llm(prompt,structure, files=None, model_name=MODEL_NAME, tem
         temperature=temperature,
         top_p=0.8,
         top_k=40,
-        max_output_tokens=4096,
+        max_output_tokens=max_output_tokens,
         response_schema = structure,
         response_mime_type = 'application/json'
     )
@@ -92,4 +92,18 @@ def structured_call_llm(prompt,structure, files=None, model_name=MODEL_NAME, tem
         contents = content,
         config=config,
     )
+    if response.usage_metadata:
+        # 2. Извлечение числа токенов для ОТВЕТА (выходные токены)
+        output_tokens = response.usage_metadata.candidates_token_count
+        # 3. Извлечение числа токенов для ПРОМПТА (входные токены)
+        input_tokens = response.usage_metadata.prompt_token_count
+        # 4. Извлечение общего числа токенов
+        total_tokens = response.usage_metadata.total_token_count
+        print(f"✅ Генерация завершена. Сгенерировано {len(response.text)} символов.")
+        print("--- Использование токенов ---")
+        print(f"Входных токенов (Промпт + Файлы): {input_tokens}")
+        print(f"Выходных токенов (Ответ LLM): {output_tokens}")
+        print(f"Всего токенов: {total_tokens}")
+    else:
+        print("ℹ️ Метаданные об использовании токенов не найдены в ответе.")
     return response

@@ -58,10 +58,10 @@ def handle_logout():
     st.session_state.jwt_token = None
     st.session_state.active_project_name = None
     st.session_state.active_project_id = None
-    st.rerun()
+    st.session_state.active_project_name = ""
 
 def show_auth_flow():
-    st.title("🔑 Авторизация")
+    st.title("🪦 Авторизация")
     
     # Переключение между входом и регистрацией
     auth_mode = st.radio("Выберите действие:", ("Вход", "Регистрация"), horizontal=True)

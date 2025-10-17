@@ -39,9 +39,26 @@ class ProjectInitialization(BaseModel):
 
 class WorkflowSchema(BaseModel):
     folder_path: str
+    llm_model: str = "gemini-2.5-flash"
 
 class ScenarioStructureSchema(WorkflowSchema):
     num_series: int
 
 class ScenarioSchema(WorkflowSchema):
-    max_output_tokens: int
+    temperature: float
+
+
+
+class FileFolder(BaseModel):
+    folder_path: str
+    
+class FileContent(BaseModel):
+    """Схема для отправки контента файла клиенту."""
+    file_name: str
+    content: str
+
+class FileUpdate(BaseModel):
+    """Схема для получения обновленного контента от клиента."""
+    folder_path: str
+    stage_name: str
+    content: str

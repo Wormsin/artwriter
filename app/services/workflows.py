@@ -67,7 +67,7 @@ def scenario_to_docx(output_dir):
         print(f"Создан файл: {file_name}")
         
 
-def expand_database(topic_path):
+def expand_database(topic_path, llm_model_name):
     folder_path = Path(topic_path)
     folder_path_facts = folder_path / "ФАКТЫ"
     folder_path_facts.mkdir(parents=True, exist_ok=True)
@@ -77,12 +77,12 @@ def expand_database(topic_path):
     file_paths = [str(file.resolve()) for file in folder_path_bd.iterdir() if file.is_file()]
     uploaded_files = upload_files(file_paths)
     prompt = get_stage1_prompt()
-    response = call_llm(prompt, files=uploaded_files)
+    response = call_llm(prompt, files=uploaded_files, model_name=llm_model_name)
     save_text(response, output_file)
     print(f"Расширенная БД сохранена в {output_file}")
     return output_file
 
-def find_connections(topic_path):
+def find_connections(topic_path, llm_model_name):
     output_folder = Path(topic_path) / "ФАКТЫ"
 
     folder = Path(f"{topic_path}/БД")
@@ -96,7 +96,7 @@ def find_connections(topic_path):
         lens+=1
         prompt = get_stage2_prompt(lens_num=lens, context=context)
         if prompt:
-            response = call_llm(prompt, files=uploaded_files, thinking=True)
+            response = call_llm(prompt, files=uploaded_files, thinking=True, model_name=llm_model_name)
             context = response
             output_file = output_folder / f"lens_{lens}_output.txt"
             save_text(response, output_file)
@@ -108,19 +108,19 @@ def find_connections(topic_path):
     return output_file
 
 
-def check_hypotheses(topic_path):
+def check_hypotheses(topic_path, llm_model_name):
     hypotheses_file = f"{topic_path}/ФАКТЫ/db_facts.txt"
     output_file = f"{topic_path}/ФАКТЫ/db_facts_checked.txt"
     uploaded_files = upload_small_file(hypotheses_file)
     prompt = get_stage3_prompt()
-    response = call_llm(prompt, files=uploaded_files, web_search=True, thinking=True)
+    response = call_llm(prompt, files=uploaded_files, web_search=True, thinking=True, model_name=llm_model_name)
     save_text(response, output_file)
     print(f"Проверенные гипотезы сохранены в {output_file}")
     return output_file
 
 
 
-def build_script_structure(topic_path, num_series):
+def build_script_structure(topic_path, num_series, llm_model_name):
     output_file_json = f"{topic_path}/СТРУКТУРА/script_structure.json"
     output_file_txt = f"{topic_path}/СТРУКТУРА/script_structure.txt"
     folder_path_structure = Path(topic_path)/ "СТРУКТУРА"
@@ -133,7 +133,8 @@ def build_script_structure(topic_path, num_series):
     uploaded_files = upload_files(file_paths)
     prompt = get_stage4_prompt(num_series)
     response = structured_call_llm(prompt, files=uploaded_files, structure=list[ScriptStructure],
-                                    max_output_tokens=65536)
+                                    max_output_tokens=65536,
+                                    model_name=llm_model_name)
 
     scripts: list[ScriptStructure] = response.parsed
     scripts = [script.model_dump() for script in scripts]
@@ -172,7 +173,7 @@ def get_chapters_per_serie_from_file(file_path: str) -> Dict[int, int]:
 
 
 
-def write_script_text(topic_path, max_output_tokens=4049):
+def write_script_text(topic_path, llm_model_name, temperature):
     output_file_json=f"{topic_path}/СЦЕНАРИЙ/scenario.json"
     folder_path_scenario = Path(topic_path)/ "СЦЕНАРИЙ"
     folder_path_scenario.mkdir(parents=True, exist_ok=True)
@@ -189,7 +190,7 @@ def write_script_text(topic_path, max_output_tokens=4049):
     for s in chapters_per_serie:
         for ch in range(1, chapters_per_serie[s]+1):
             prompt = get_stage5_prompt(ser=s, ch=ch)
-            response = call_llm(prompt, files=uploaded_files)
+            response = call_llm(prompt, files=uploaded_files, model_name=llm_model_name, temperature=temperature)
             for serie in scenario_data:
                 if serie.serie_number == s:
                     target_serie = serie

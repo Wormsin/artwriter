@@ -98,9 +98,10 @@ def share_project_access(jwt_token: str, project_id: int, target_username: str, 
 
 
 
-def expand_db(jwt_token: str, folder_path: str, project_id:int):
+def expand_db(jwt_token: str, folder_path: str, project_id:int, llm_model:str):
     payload = {
-        "folder_path": folder_path
+        "folder_path": folder_path,
+        "llm_model": llm_model
     }
     headers = {
         "Authorization": f"Bearer {jwt_token}",
@@ -120,9 +121,10 @@ def expand_db(jwt_token: str, folder_path: str, project_id:int):
         st.error(f"❌ Произошла непредвиденная ошибка: {e}")
         raise
 
-def search_facts(jwt_token: str, folder_path: str,  project_id:int):
+def search_facts(jwt_token: str, folder_path: str,  project_id:int, llm_model:str):
     payload = {
-        "folder_path": folder_path
+        "folder_path": folder_path,
+        "llm_model": llm_model
     }
     headers = {
         "Authorization": f"Bearer {jwt_token}",
@@ -142,9 +144,10 @@ def search_facts(jwt_token: str, folder_path: str,  project_id:int):
         st.error(f"❌ Произошла непредвиденная ошибка: {e}")
         raise
 
-def check_facts(jwt_token: str, folder_path: str,  project_id:int):
+def check_facts(jwt_token: str, folder_path: str,  project_id:int, llm_model:str):
     payload = {
         "folder_path": folder_path,
+        "llm_model": llm_model
     }
     headers = {
         "Authorization": f"Bearer {jwt_token}",
@@ -164,9 +167,10 @@ def check_facts(jwt_token: str, folder_path: str,  project_id:int):
         st.error(f"❌ Произошла непредвиденная ошибка: {e}")
         raise
 
-def generate_structure(jwt_token: str, folder_path: str,  project_id:int, num_series: int):
+def generate_structure(jwt_token: str, folder_path: str,  project_id:int, num_series: int, llm_model:str):
     payload = {
         "folder_path": folder_path,
+        "llm_model": llm_model,
         "num_series": num_series
     }
     headers = {
@@ -187,10 +191,11 @@ def generate_structure(jwt_token: str, folder_path: str,  project_id:int, num_se
         st.error(f"❌ Произошла непредвиденная ошибка: {e}")
         raise
 
-def write_scenario(jwt_token: str, folder_path: str,  project_id:int, max_output_tokens: int):
+def write_scenario(jwt_token: str, folder_path: str,  project_id:int, temperature: float, llm_model:str):
     payload = {
         "folder_path": folder_path,
-        "max_output_tokens": max_output_tokens
+        "llm_model": llm_model,
+        "temperature": temperature
     }
     headers = {
         "Authorization": f"Bearer {jwt_token}",
@@ -237,3 +242,35 @@ def upload_reports_to_api(jwt_token: str, project_id: int, folder_path:str, uplo
 
     except requests.exceptions.ConnectionError:
         raise ConnectionError("Не удалось подключиться к серверу API.")
+    
+
+def fetch_file(jwt_token:str, stage_name: str, project_id:int, folder_path:str):
+    """Получает контент файла с сервера."""
+    data = {"folder_path": folder_path}
+    headers = {
+        "Authorization": f"Bearer {jwt_token}",
+    }
+    try:
+        response = requests.get(f"{FASTAPI_BASE_URL}/files/{project_id}/{stage_name}", json =data, headers=headers)
+        response.raise_for_status() # Вызывает исключение для статусов 4xx/5xx
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        st.error(f"Ошибка при загрузке файла: {e}")
+        return None
+
+def save_file(jwt_token:str, stage_name: str, project_id:int, content: str, folder_path:str):
+    """Сохраняет обновленный контент на сервере."""
+    payload = {
+        "folder_path": folder_path,
+        "stage_name": stage_name,
+        "content": content 
+    }
+    headers = {
+        "Authorization": f"Bearer {jwt_token}",
+    }
+    try:
+        response = requests.post(f"{FASTAPI_BASE_URL}/files/update/{project_id}", json=payload, headers=headers)
+        response.raise_for_status()
+        st.success("✅ Файл успешно сохранен на сервере!")
+    except requests.exceptions.RequestException as e:
+        st.error(f"Ошибка при сохранении файла: {e}")

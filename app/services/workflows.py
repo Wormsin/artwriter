@@ -2,10 +2,11 @@ import json
 from services.gemini_api import upload_files, call_llm, upload_small_file, structured_call_llm
 from services.preprompts import *
 from pathlib import Path
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from docx import Document
 from docx.shared import Pt
 from typing import Dict, List
+import uuid
 
 
 class ChapterStructure(BaseModel):
@@ -26,6 +27,13 @@ class ScenarioStructure(BaseModel):
     serie_name: str
     content: list[ChapterTextScructure]
 
+class ChapterStructureID(ChapterStructure):
+    chapter_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+class ScriptStructureID(ScriptStructure):
+    serie_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    content: list[ChapterStructureID]
+
+
 
 def save_text(content, output_file):
     """Сохраняет текстовый контент в файл."""
@@ -36,6 +44,7 @@ def save_json(obj, output_file):
     """Сохраняет JSON-объект в файл."""
     with open(output_file, 'w', encoding='utf-8') as f:
         json.dump(obj, f, ensure_ascii=False, indent=2)
+
 
 def scenario_to_docx(output_dir):
     output_path = Path(output_dir)
@@ -119,7 +128,6 @@ def check_hypotheses(topic_path, llm_model_name):
     return output_file
 
 
-
 def build_script_structure(topic_path, num_series, llm_model_name):
     output_file_json = f"{topic_path}/СТРУКТУРА/script_structure.json"
     output_file_txt = f"{topic_path}/СТРУКТУРА/script_structure.txt"
@@ -137,9 +145,17 @@ def build_script_structure(topic_path, num_series, llm_model_name):
                                     model_name=llm_model_name)
 
     scripts: list[ScriptStructure] = response.parsed
-    scripts = [script.model_dump() for script in scripts]
-    save_json(scripts, output_file_json)
-    save_text(response.text, output_file_txt)
+    scripts_raw = [script.model_dump() for script in scripts]
+    scripts_with_ids: List[ScriptStructureID] = [
+    ScriptStructureID.model_validate(script) for script in scripts_raw]
+    scripts_ids = [script.model_dump() for script in scripts_with_ids]
+    save_json(scripts_ids, output_file_json)
+    json_string = json.dumps(
+        scripts_ids, 
+        indent=2, 
+        ensure_ascii=False
+    )
+    save_text(json_string, output_file_txt)
     print(f"Структура сценария сохранена в {output_file_json}")
     return output_file_json
 
@@ -171,9 +187,40 @@ def get_chapters_per_serie_from_file(file_path: str) -> Dict[int, int]:
         
     return chapters_per_serie, scenario_data
 
-
+def update_json_structure(topic_path):
+    file_json = f"{topic_path}/СТРУКТУРА/script_structure.json"
+    file_txt = f"{topic_path}/СТРУКТУРА/script_structure.txt"
+    try:
+        with open(file_txt, 'r', encoding='utf-8') as f:
+            json_string = f.read()
+    except FileNotFoundError:
+        print(f"🛑 Ошибка: Файл не найден по пути: {file_txt}")
+        return False
+    except Exception as e:
+        print(f"🛑 Ошибка чтения файла {file_txt}: {e}")
+        return False
+    try:
+        data = json.loads(json_string)
+    except json.JSONDecodeError as e:
+        print(f"🛑 Ошибка: Содержимое файла '{file_txt}' не является валидным JSON.")
+        print(f"Подробности ошибки: {e}")
+        return False
+    try:
+        with open(file_json, 'w', encoding='utf-8') as f:
+            json.dump(
+                data, 
+                f, 
+                indent=2, 
+                ensure_ascii=False
+            )
+        print(f"✅ Успех: Содержимое из '{file_txt}' сохранено и отформатировано в '{file_json}'")
+        return True
+    except Exception as e:
+        print(f"🛑 Ошибка записи в JSON файл: {e}")
+        return False
 
 def write_script_text(topic_path, llm_model_name, temperature):
+    update_json_structure(topic_path=topic_path)
     output_file_json=f"{topic_path}/СЦЕНАРИЙ/scenario.json"
     folder_path_scenario = Path(topic_path)/ "СЦЕНАРИЙ"
     folder_path_scenario.mkdir(parents=True, exist_ok=True)
@@ -187,9 +234,10 @@ def write_script_text(topic_path, llm_model_name, temperature):
 
     chapters_per_serie, scenario_data = get_chapters_per_serie_from_file(f"{topic_path}/СТРУКТУРА/script_structure.json")
 
+    previous_chapter_text = ""
     for s in chapters_per_serie:
         for ch in range(1, chapters_per_serie[s]+1):
-            prompt = get_stage5_prompt(ser=s, ch=ch)
+            prompt = get_stage5_prompt(ser=s, ch=ch, previous_chapter_text=previous_chapter_text)
             response = call_llm(prompt, files=uploaded_files, model_name=llm_model_name, temperature=temperature)
             for serie in scenario_data:
                 if serie.serie_number == s:
@@ -200,6 +248,7 @@ def write_script_text(topic_path, llm_model_name, temperature):
                     target_chapter = chapter
                     break
             target_chapter.text = response
+            previous_chapter_text = response
     
     try:
         scripts = [sd.model_dump() for sd in scenario_data]

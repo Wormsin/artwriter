@@ -2,7 +2,8 @@
 import streamlit as st
 from streamlit_modules.api_calls import (
     get_user_projects, create_project, expand_db, search_facts, 
-    check_facts, generate_structure, write_scenario, APIError,share_project_access, upload_reports_to_api
+    check_facts, generate_structure, write_scenario, APIError,share_project_access, 
+    upload_reports_to_api, download_scenario_docx
 )
 
 GEMINI_MODELS = [
@@ -297,3 +298,16 @@ def show_main_app():
                         st.json(result) # Показать ответ от FastAPI
                 except Exception:
                     pass  # Errors handled in api_calls
+            response = download_scenario_docx(
+                st.session_state.jwt_token,
+                st.session_state.active_project_id,
+                st.session_state.active_project_folder
+            )
+            if response:
+                st.download_button(
+                    label="Скачать сценарий",
+                    data=response,
+                    file_name="сценарий.zip",
+                    mime="application/zip"
+                )
+            

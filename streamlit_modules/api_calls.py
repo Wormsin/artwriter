@@ -274,3 +274,18 @@ def save_file(jwt_token:str, stage_name: str, project_id:int, content: str, fold
         st.success("✅ Файл успешно сохранен на сервере!")
     except requests.exceptions.RequestException as e:
         st.error(f"Ошибка при сохранении файла: {e}")
+
+
+def download_scenario_docx(jwt_token:str, project_id:int, folder_path:str) -> Optional[bytes]:
+    """Скачивает ZIP с .docx файлами сценария."""
+    data = {"folder_path": folder_path}
+    headers = {
+        "Authorization": f"Bearer {jwt_token}",
+    }
+    try:
+        response = requests.get(f"{FASTAPI_BASE_URL}/files/download/scenario/{project_id}", json =data, headers=headers)
+        response.raise_for_status() # Вызывает исключение для статусов 4xx/5xx
+        return response.content
+    except requests.exceptions.RequestException as e:
+        st.error(f"Ошибка при скачивании файлов сценария: {e}")
+        return None

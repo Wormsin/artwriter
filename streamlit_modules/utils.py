@@ -110,8 +110,12 @@ def show_structure_editor(stage_filename):
         })
         st.session_state.file_content_editing = json.dumps(data, indent=2, ensure_ascii=False)
 
-    def delete_serie_callback(serie_number):
-        data[:] = [s for s in data if s.get('serie_number') != serie_number]
+    def delete_serie_callback(serie_id, serie_number):
+        data[:] = [s for s in data if s.get('serie_id') != serie_id]
+        # Переиндексация серий
+        if len(data[:]) > 0:
+            for idx, s in enumerate(data):
+                s['serie_number'] = idx +1
         st.session_state.file_content_editing = json.dumps(data, indent=2, ensure_ascii=False)
 
     def add_chapter_callback(serie_id):
@@ -127,14 +131,13 @@ def show_structure_editor(stage_filename):
                 break
         st.session_state.file_content_editing = json.dumps(data, indent=2, ensure_ascii=False)
 
-    def delete_chapter_callback(serie_id, chapter_id, chapter_number):
+    def delete_chapter_callback(serie_id, chapter_id):
         for serie in data:
             if serie.get('serie_id') == serie_id:
                 serie['content'][:] = [c for c in serie['content'] if c.get('chapter_id') != chapter_id]
                 if len(serie['content'][:]) > 0:
-                    for c in serie['content']:
-                        if c.get('chapter_number') > chapter_number:
-                            c['chapter_number'] -=1
+                    for indx, c in enumerate(serie['content']):
+                            c['chapter_number'] = indx +1
                 break
         st.session_state.file_content_editing = json.dumps(data, indent=2, ensure_ascii=False)
 
@@ -162,7 +165,7 @@ def show_structure_editor(stage_filename):
                 "❌ Удалить Серию", 
                 key=f"{serie_key_prefix}_delete", 
                 on_click=delete_serie_callback, 
-                args=(serie.get('serie_number'),)
+                args=(serie.get('serie_id'), serie.get('serie_number'))
             )
             
             st.markdown("---")
@@ -192,7 +195,7 @@ def show_structure_editor(stage_filename):
                     "➖ Удалить Главу", 
                     key=f"{chapter_key_prefix}_delete", 
                     on_click=delete_chapter_callback, 
-                    args=(serie.get('serie_id'), chapter.get('chapter_id'), chapter.get('chapter_number'))
+                    args=(serie.get('serie_id'), chapter.get('chapter_id'))
                 )
                 st.markdown("---")
                 
@@ -209,7 +212,7 @@ def show_structure_editor(stage_filename):
                 "➕ Добавить Главу", 
                 key=f"{serie_key_prefix}_add_chap", 
                 on_click=add_chapter_callback, 
-                args=(serie.get('serie_number'),)
+                args=(serie.get('serie_id'),)
             )
             
             # Собираем отредактированные данные серии

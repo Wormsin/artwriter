@@ -3,7 +3,7 @@ from google import genai
 from google.genai import types
 import pathlib
 from dotenv import load_dotenv
-
+import time
 load_dotenv()
 
 GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
@@ -47,7 +47,7 @@ def upload_small_file(file_path):
 
 
 def call_llm(prompt, files=None, model_name=MODEL_NAME, 
-             web_search = False, thinking = False, temperature=0.7):
+             web_search = False, thinking = True, temperature=0.7, max_output_tokens=10000):
     content = [prompt]
     tools = []
     thinking_budget = 1024
@@ -64,16 +64,25 @@ def call_llm(prompt, files=None, model_name=MODEL_NAME,
         temperature=temperature,
         top_p=0.8,
         top_k=40,
-        max_output_tokens=4096,
+        max_output_tokens=max_output_tokens,
         tools=tools,
         thinking_config=types.ThinkingConfig(thinking_budget=thinking_budget)
 )
-    response = client.models.generate_content(
-        model = model_name,
-        contents = content,
-        config=config,
-    )
-    return response.text
+    response_status = 429
+    attemp = 1
+    while True:
+        response = client.models.generate_content(
+            model = model_name,
+            contents = content,
+            config=config,
+        )
+        response_status = response.status_code
+        print(response_status)
+        if response_status == 429:
+            time.sleep(13*attemp)
+            attemp+=1
+        else:
+            return response.text
 
 def structured_call_llm(prompt,structure, files=None, model_name=MODEL_NAME, temperature=0.7, max_output_tokens=4096):
     content = [prompt]

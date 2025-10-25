@@ -7,7 +7,8 @@ from docx import Document
 from docx.shared import Pt
 from typing import Dict, List
 import uuid
-
+import re
+import os
 
 class ChapterStructure(BaseModel):
     chapter_number: int
@@ -96,19 +97,23 @@ def find_connections(topic_path, llm_model_name):
 
     folder = Path(f"{topic_path}/БД")
     file_paths = [str(file.resolve()) for file in folder.iterdir() if file.is_file()]
-    file_paths.append(f"{topic_path}/ФАКТЫ/db_extension.txt")
     uploaded_files = upload_files(file_paths)
 
     lens = 0
-    context = ''
     while True:
         lens+=1
-        prompt = get_stage2_prompt(lens_num=lens, context=context)
+        prompt = get_stage2_prompt(lens_num=lens)
         if prompt:
-            response = call_llm(prompt, files=uploaded_files, thinking=True, model_name=llm_model_name)
-            context = response
+            response = call_llm(prompt, files=uploaded_files, model_name=llm_model_name)
+            #context = response
             output_file = output_folder / f"lens_{lens}_output.txt"
             save_text(response, output_file)
+            if lens == 1:
+                file_paths = [f"{topic_path}/ФАКТЫ/lens_{lens}_output.txt", f"{topic_path}/ФАКТЫ/db_extension.txt"]
+                uploaded_files = upload_files(file_paths)
+            else:
+                file_path = f"{topic_path}/ФАКТЫ/lens_{lens}_output.txt"
+                uploaded_files = upload_small_file(file_path)
         else:
             output_file = output_folder / "db_facts.txt"
             save_text(response, output_file)
@@ -116,15 +121,64 @@ def find_connections(topic_path, llm_model_name):
     print(f"Гипотезы сохранены в {output_file}")
     return output_file
 
+def extract_blocks(text, start_tag, end_tag):
+    pattern = re.compile(rf"\[{start_tag}\](.*?)\[{end_tag}\]", re.DOTALL)
+    return [block.strip() for block in pattern.findall(text)]
+def connect_check_hypothese_results(topic_path):
+    file_hypothesis = f"{topic_path}/ФАКТЫ/db_facts.txt"
+    files_checks = [f"{topic_path}/ФАКТЫ/db_facts_checked_1.txt", 
+                    f"{topic_path}/ФАКТЫ/db_facts_checked_2.txt", 
+                    f"{topic_path}/ФАКТЫ/db_facts_checked_3.txt"]
+    output_file = f"{topic_path}/ФАКТЫ/db_facts_checked.txt"
+    with open(file_hypothesis, "r", encoding="utf-8") as f:
+        hypotheses = extract_blocks(f.read(), "НАЧАЛО ГИПОТЕЗЫ", "КОНЕЦ ГИПОТЕЗЫ")
+    all_checks = []
+    for path in files_checks:
+        with open(path, "r", encoding="utf-8") as f:
+            checks = extract_blocks(f.read(), "НАЧАЛО ПРОВЕРКИ", "КОНЕЦ ПРОВЕРКИ")
+            all_checks.append(checks)
+    num_hypotheses = len(hypotheses)
+    for i, checks in enumerate(all_checks, 1):
+        if len(checks) != num_hypotheses:
+            print(f"⚠️ Предупреждение: в файле проверки {i} найдено {len(checks)} блоков, "
+                f"а гипотез — {num_hypotheses}.")
+    merged_blocks = []
+    for i in range(num_hypotheses):
+        block = "[НАЧАЛО ПРОВЕРКИ ГИПОТЕЗЫ]\n"
+        block += hypotheses[i] + "\n\n"
+        # добавляем все проверки для этой гипотезы
+        for checks in all_checks:
+            if i < len(checks):
+                block += checks[i] + "\n\n"
+        block += "[КОНЕЦ ПРОВЕРКИ ГИПОТЕЗЫ]\n"
+        merged_blocks.append(block)
+
+    # --- Сохраняем результат ---
+    with open(output_file, "w", encoding="utf-8") as f:
+        f.write("\n".join(merged_blocks))
+    for file_path in files_checks:
+        if os.path.exists(file_path):
+            os.remove(file_path)
+            print(f"🗑️ Файл '{file_path}' удалён.")
+        else:
+            print(f"⚠️ Файл '{file_path}' не найден, пропускаем.")
+    return True
 
 def check_hypotheses(topic_path, llm_model_name):
     hypotheses_file = f"{topic_path}/ФАКТЫ/db_facts.txt"
-    output_file = f"{topic_path}/ФАКТЫ/db_facts_checked.txt"
     uploaded_files = upload_small_file(hypotheses_file)
-    prompt = get_stage3_prompt()
-    response = call_llm(prompt, files=uploaded_files, web_search=True, thinking=True, model_name=llm_model_name)
-    save_text(response, output_file)
-    print(f"Проверенные гипотезы сохранены в {output_file}")
+    lens = 0
+    while True:
+        lens+=1
+        prompt = get_stage3_prompt(lens_num=lens)
+        if prompt:
+            response = call_llm(prompt, files=uploaded_files, web_search=True, model_name=llm_model_name)
+            output_file = f"{topic_path}/ФАКТЫ/db_facts_checked_{lens}.txt"
+            save_text(response, output_file)
+            print(f"Проверенные гипотезы сохранены в {output_file}")
+        else:
+            break
+    connect_check_hypothese_results(topic_path)
     return output_file
 
 

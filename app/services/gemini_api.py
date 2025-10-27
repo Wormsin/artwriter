@@ -4,6 +4,8 @@ from google.genai import types
 import pathlib
 from dotenv import load_dotenv
 import time
+import random
+from google.api_core.exceptions import ResourceExhausted
 load_dotenv()
 
 GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
@@ -47,7 +49,7 @@ def upload_small_file(file_path):
 
 
 def call_llm(prompt, files=None, model_name=MODEL_NAME, 
-             web_search = False, thinking = True, temperature=0.7, max_output_tokens=10000):
+             web_search = False, thinking = True, temperature=1, max_output_tokens=10000):
     content = [prompt]
     tools = []
     thinking_budget = 1024
@@ -62,27 +64,44 @@ def call_llm(prompt, files=None, model_name=MODEL_NAME,
         thinking_budget=0
     config = types.GenerateContentConfig(
         temperature=temperature,
-        top_p=0.8,
-        top_k=40,
         max_output_tokens=max_output_tokens,
         tools=tools,
         thinking_config=types.ThinkingConfig(thinking_budget=thinking_budget)
 )
-    response_status = 429
-    attemp = 1
-    while True:
-        response = client.models.generate_content(
-            model = model_name,
-            contents = content,
-            config=config,
-        )
-        response_status = response.status_code
-        print(response_status)
-        if response_status == 429:
-            time.sleep(13*attemp)
-            attemp+=1
-        else:
+    max_retries = 5
+    base_delay=5
+    retries = 0
+    while retries < max_retries:
+        try:
+            response = client.models.generate_content(
+                model = model_name,
+                contents = content,
+                config=config,
+            )
             return response.text
+        except ResourceExhausted as e:
+            # Перехватываем ошибку 429
+            print(f"Ошибка 429: Лимит запросов исчерпан (Попытка {retries + 1}/{max_retries}).")
+            
+            if retries == max_retries - 1:
+                print("Достигнут лимит попыток. Запрос не выполнен.")
+                raise e
+            # Расчет времени ожидания: base_delay * (2^retries) + (0-1 сек "джиттера")
+            # "Джиттер" (случайная добавка) помогает избежать "стадного эффекта",
+            # когда все клиенты повторяют запрос в одно и то же время.
+            delay = (base_delay * (2 ** retries)) + random.uniform(0, 1)
+            
+            print(f"Ждем {delay:.2f} секунд перед следующей попыткой...")
+            time.sleep(delay)
+            
+            # Увеличиваем счетчик попыток
+            retries += 1
+            
+        except Exception as e:
+            # Обработка других, не связанных с лимитами, ошибок
+            print(f"Произошла непредвиденная ошибка: {e}")
+            # При других ошибках (например, ошибка аутентификации) повторять нет смысла
+            break
 
 def structured_call_llm(prompt,structure, files=None, model_name=MODEL_NAME, temperature=0.7, max_output_tokens=4096):
     content = [prompt]
@@ -90,8 +109,6 @@ def structured_call_llm(prompt,structure, files=None, model_name=MODEL_NAME, tem
         content.extend(files)
     config = types.GenerateContentConfig(
         temperature=temperature,
-        top_p=0.8,
-        top_k=40,
         max_output_tokens=max_output_tokens,
         response_schema = structure,
         response_mime_type = 'application/json'

@@ -35,7 +35,7 @@ class ScriptStructureID(ScriptStructure):
     content: list[ChapterStructureID]
 
 
-
+# --- УТИЛИТЫ ---
 def save_text(content, output_file):
     """Сохраняет текстовый контент в файл."""
     with open(output_file, 'w', encoding='utf-8') as f:
@@ -46,37 +46,9 @@ def save_json(obj, output_file):
     with open(output_file, 'w', encoding='utf-8') as f:
         json.dump(obj, f, ensure_ascii=False, indent=2)
 
-
-def scenario_to_docx(output_dir):
-    output_path = Path(output_dir)
-    input_file = f"{output_dir}/scenario.json"
-    with open(input_file, "r", encoding="utf-8") as f:
-        data = json.load(f)
-
-    for serie in data:
-        doc = Document()
-        serie_title = f"{serie['serie_number']}. {serie['serie_name']}"
-        doc.add_heading(serie_title, level=0)
-
-        for chapter in serie["content"]:
-            # Название главы
-            doc.add_heading(f"{chapter['chapter_number']}.   {chapter['chapter_name']}", level=1)
-
-            # Описание главы (курсив)
-            p_desc = doc.add_paragraph()
-            run_desc = p_desc.add_run(chapter["chapter_description"])
-            run_desc.italic = True
-            run_desc.font.size = Pt(11)
-
-            # Основной текст (обычный)
-            p_text = doc.add_paragraph(chapter["text"])
-            p_text.style = "Normal"
-
-        file_name = f"Серия_{serie['serie_number']}.docx"
-        doc.save(output_path / file_name)
-        print(f"Создан файл: {file_name}")
         
 
+# --- ПОИСК ДОП ФАКТОВ ---
 def expand_database(topic_path, llm_model_name):
     folder_path = Path(topic_path)
     folder_path_facts = folder_path / "ФАКТЫ"
@@ -87,11 +59,16 @@ def expand_database(topic_path, llm_model_name):
     file_paths = [str(file.resolve()) for file in folder_path_bd.iterdir() if file.is_file()]
     uploaded_files = upload_files(file_paths)
     prompt = get_stage1_prompt()
-    response = call_llm(prompt, files=uploaded_files, model_name=llm_model_name)
+    response = call_llm(prompt, files=uploaded_files, 
+                        model_name=llm_model_name, 
+                        temperature=0.2, 
+                        web_search=False)
     save_text(response, output_file)
     print(f"Расширенная БД сохранена в {output_file}")
     return output_file
 
+
+# --- ПОИСК НЕОЧЕВИДНЫХ СВЯЗЕЙ ---
 def find_connections(topic_path, llm_model_name):
     output_folder = Path(topic_path) / "ФАКТЫ"
 
@@ -102,17 +79,20 @@ def find_connections(topic_path, llm_model_name):
     lens = 0
     while True:
         lens+=1
-        prompt = get_stage2_prompt(lens_num=lens)
+        prompt = get_stage2_prompt_main(lens_num=lens)
         if prompt:
-            response = call_llm(prompt, files=uploaded_files, model_name=llm_model_name)
+            response = call_llm(prompt, files=uploaded_files, 
+                                model_name=llm_model_name, 
+                                temperature=1.5,
+                                web_search=False)
             #context = response
-            output_file = output_folder / f"lens_{lens}_output.txt"
+            output_file = output_folder / f"lens_{lens}_main.txt"
             save_text(response, output_file)
             if lens == 1:
-                file_paths = [f"{topic_path}/ФАКТЫ/lens_{lens}_output.txt", f"{topic_path}/ФАКТЫ/db_extension.txt"]
+                file_paths = [f"{topic_path}/ФАКТЫ/lens_{lens}_main.txt", f"{topic_path}/ФАКТЫ/db_extension.txt"]
                 uploaded_files = upload_files(file_paths)
             else:
-                file_path = f"{topic_path}/ФАКТЫ/lens_{lens}_output.txt"
+                file_path = f"{topic_path}/ФАКТЫ/lens_{lens}_main.txt"
                 uploaded_files = upload_small_file(file_path)
         else:
             output_file = output_folder / "db_facts.txt"
@@ -121,6 +101,31 @@ def find_connections(topic_path, llm_model_name):
     print(f"Гипотезы сохранены в {output_file}")
     return output_file
 
+
+def find_connections_blind_spots(topic_path, llm_model_name):
+    output_folder = Path(topic_path) / "ФАКТЫ"
+
+    folder = Path(f"{topic_path}/БД")
+    file_paths = [str(file.resolve()) for file in folder.iterdir() if file.is_file()]
+    file_paths.append(f"{topic_path}/ФАКТЫ/db_extension.txt")
+    uploaded_files = upload_files(file_paths)
+
+    lens = 0
+    while True:
+        lens+=1
+        prompt = get_stage2_prompt_blind_spots(lens_num=lens)
+        if prompt:
+            response = call_llm(prompt, files=uploaded_files, 
+                                model_name=llm_model_name, 
+                                temperature=1.5,
+                                web_search=False)
+            
+            output_file = output_folder / f"lens_{lens}_blind_spots.txt"
+            save_text(response, output_file)
+        else:
+            return output_file
+
+# --- ПРОВЕРКА ГИПОТЕЗ ---
 def extract_blocks(text, start_tag, end_tag):
     pattern = re.compile(rf"\[{start_tag}\](.*?)\[{end_tag}\]", re.DOTALL)
     return [block.strip() for block in pattern.findall(text)]
@@ -165,16 +170,20 @@ def connect_check_hypothese_results(topic_path):
     return True
 
 def check_hypotheses(topic_path, llm_model_name):
-    hypotheses_file = f"{topic_path}/ФАКТЫ/db_facts.txt"
-    uploaded_files = upload_small_file(hypotheses_file)
+    file_paths = [f"{topic_path}/ФАКТЫ/db_facts.txt"]
+    uploaded_files = upload_files(file_paths)
     lens = 0
     while True:
         lens+=1
         prompt = get_stage3_prompt(lens_num=lens)
         if prompt:
-            response = call_llm(prompt, files=uploaded_files, web_search=True, model_name=llm_model_name)
+            response = call_llm(prompt, files=uploaded_files, 
+                                web_search=True, model_name=llm_model_name,
+                                temperature=0.2)
             output_file = f"{topic_path}/ФАКТЫ/db_facts_checked_{lens}.txt"
             save_text(response, output_file)
+            file_paths.append(f"{topic_path}/ФАКТЫ/db_facts_checked_{lens}.txt")
+            uploaded_files = upload_files(file_paths)
             print(f"Проверенные гипотезы сохранены в {output_file}")
         else:
             break
@@ -182,6 +191,8 @@ def check_hypotheses(topic_path, llm_model_name):
     return output_file
 
 
+
+# --- СОЗДАНИЕ СТРУКТУРЫ СЦЕНАРИЯ ---
 def build_script_structure(topic_path, num_series, llm_model_name):
     output_file_json = f"{topic_path}/СТРУКТУРА/script_structure.json"
     output_file_txt = f"{topic_path}/СТРУКТУРА/script_structure.txt"
@@ -196,7 +207,8 @@ def build_script_structure(topic_path, num_series, llm_model_name):
     prompt = get_stage4_prompt(num_series)
     response = structured_call_llm(prompt, files=uploaded_files, structure=list[ScriptStructure],
                                     max_output_tokens=65536,
-                                    model_name=llm_model_name)
+                                    model_name=llm_model_name,
+                                    temperature=1)
 
     scripts: list[ScriptStructure] = response.parsed
     scripts_raw = [script.model_dump() for script in scripts]
@@ -214,6 +226,36 @@ def build_script_structure(topic_path, num_series, llm_model_name):
     return output_file_json
 
 
+# --- НАПИСАНИЕ ТЕКСТА СЦЕНАРИЯ---
+
+def scenario_to_docx(output_dir):
+    output_path = Path(output_dir)
+    input_file = f"{output_dir}/scenario.json"
+    with open(input_file, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    for serie in data:
+        doc = Document()
+        serie_title = f"{serie['serie_number']}. {serie['serie_name']}"
+        doc.add_heading(serie_title, level=0)
+
+        for chapter in serie["content"]:
+            # Название главы
+            doc.add_heading(f"{chapter['chapter_number']}.   {chapter['chapter_name']}", level=1)
+
+            # Описание главы (курсив)
+            p_desc = doc.add_paragraph()
+            run_desc = p_desc.add_run(chapter["chapter_description"])
+            run_desc.italic = True
+            run_desc.font.size = Pt(11)
+
+            # Основной текст (обычный)
+            p_text = doc.add_paragraph(chapter["text"])
+            p_text.style = "Normal"
+
+        file_name = f"Серия_{serie['serie_number']}.docx"
+        doc.save(output_path / file_name)
+        print(f"Создан файл: {file_name}")
 
 def get_chapters_per_serie_from_file(file_path: str) -> Dict[int, int]:
     file_path_obj = Path(file_path)
@@ -292,7 +334,9 @@ def write_script_text(topic_path, llm_model_name, temperature):
     for s in chapters_per_serie:
         for ch in range(1, chapters_per_serie[s]+1):
             prompt = get_stage5_prompt(ser=s, ch=ch, previous_chapter_text=previous_chapter_text)
-            response = call_llm(prompt, files=uploaded_files, model_name=llm_model_name, temperature=temperature)
+            response = call_llm(prompt, files=uploaded_files, 
+                                model_name=llm_model_name, 
+                                temperature=1.3)
             for serie in scenario_data:
                 if serie.serie_number == s:
                     target_serie = serie

@@ -19,7 +19,7 @@ router_files = APIRouter(
 
 # Список допустимых этапов для редактирования
 FILE_STAGES = {
-    "plus_facts": "ФАКТЫ/db_extension.txt",
+    "plus_facts": "DB/db_extension.txt",
     "interesting_facts": "ФАКТЫ/db_facts.txt",
     "check_facts": "ФАКТЫ/db_facts_checked.txt",
     "structure": "СТРУКТУРА/script_structure.txt"

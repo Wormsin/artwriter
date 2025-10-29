@@ -23,7 +23,7 @@ def create_project_filesystem(topic_name: str):
     results = []
     result =  yandex_api.create_folder(f"/{topic_name}")
     results.append(result)
-    folders = ["БД", "ФАКТЫ", "СТРУКТУРА", "СЦЕНАРИИ"]
+    folders = ["DB", "FACTS", "STRUCTURE", "SCENARIO"]
     for folder in folders:
         result =  yandex_api.create_folder(f"/{topic_name}/{folder}")
         results.append(result)

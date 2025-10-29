@@ -5,10 +5,13 @@ from pathlib import Path
 from pydantic import BaseModel, Field
 from docx import Document
 from docx.shared import Pt
-from typing import Dict, List
+from typing import Dict, List, Literal
 import uuid
 import re
 import os
+import shutil
+import glob
+
 
 class ChapterStructure(BaseModel):
     chapter_number: int
@@ -51,10 +54,8 @@ def save_json(obj, output_file):
 # --- ПОИСК ДОП ФАКТОВ ---
 def expand_database(topic_path, llm_model_name):
     folder_path = Path(topic_path)
-    folder_path_facts = folder_path / "ФАКТЫ"
-    folder_path_facts.mkdir(parents=True, exist_ok=True)
-    folder_path_bd = folder_path / "БД"
-    output_file = folder_path_facts / "db_extension.txt"
+    folder_path_bd = folder_path / "DB"
+    output_file = folder_path_bd / "db_extension.txt"
 
     file_paths = [str(file.resolve()) for file in folder_path_bd.iterdir() if file.is_file()]
     uploaded_files = upload_files(file_paths)
@@ -69,10 +70,12 @@ def expand_database(topic_path, llm_model_name):
 
 
 # --- ПОИСК НЕОЧЕВИДНЫХ СВЯЗЕЙ ---
-def find_connections(topic_path, llm_model_name):
-    output_folder = Path(topic_path) / "ФАКТЫ"
+def find_connections_main(topic_path, llm_model_name):
+    output_folder = Path(topic_path) / "FACTS" / "ALG_MAIN" / "HYP" 
+    output_folder_lens = Path(topic_path) / "FACTS" / "ALG_MAIN" / "HYP" / "LENS"
+    output_folder_lens.mkdir(parents=True, exist_ok=True)
 
-    folder = Path(f"{topic_path}/БД")
+    folder = Path(f"{topic_path}/BD")
     file_paths = [str(file.resolve()) for file in folder.iterdir() if file.is_file()]
     uploaded_files = upload_files(file_paths)
 
@@ -86,13 +89,13 @@ def find_connections(topic_path, llm_model_name):
                                 temperature=1.5,
                                 web_search=False)
             #context = response
-            output_file = output_folder / f"lens_{lens}_main.txt"
+            output_file = output_folder_lens / f"lens_{lens}_main.txt"
             save_text(response, output_file)
             if lens == 1:
-                file_paths = [f"{topic_path}/ФАКТЫ/lens_{lens}_main.txt", f"{topic_path}/ФАКТЫ/db_extension.txt"]
+                file_paths = [output_folder_lens / f"lens_{lens}_main.txt", output_folder / "db_extension.txt"]
                 uploaded_files = upload_files(file_paths)
             else:
-                file_path = f"{topic_path}/ФАКТЫ/lens_{lens}_main.txt"
+                file_path = output_folder_lens / f"lens_{lens}_main.txt"
                 uploaded_files = upload_small_file(file_path)
         else:
             output_file = output_folder / "db_facts.txt"
@@ -102,10 +105,37 @@ def find_connections(topic_path, llm_model_name):
     return output_file
 
 
-def find_connections_blind_spots(topic_path, llm_model_name):
-    output_folder = Path(topic_path) / "ФАКТЫ"
+def connect_blind_spots_lenses(lens_folder, output_file):
+    try:
+        txt_files = [lens_folder / f"{f}" for f in os.listdir(lens_folder)]
+        
+        if not txt_files:
+            print(f"В папке '{lens_folder}' не найдено .txt файлов.")
+            return
 
-    folder = Path(f"{topic_path}/БД")
+        with open(output_file, 'w', encoding='utf-8') as outfile:
+            for filepath in txt_files:
+                try:
+                    with open(filepath, 'r', encoding='utf-8') as infile:
+                        content = infile.read()
+                        outfile.write(content)
+                        outfile.write('\n')
+                        
+                except Exception as e:
+                    print(f"Ошибка при чтении файла {filepath}: {e}")
+        print(f"Файлы успешно объединены в '{output_file}'")
+        shutil.rmtree(lens_folder)
+    except FileNotFoundError:
+        print(f"Ошибка: Папка '{lens_folder}' не найдена.")
+    except Exception as e:
+        print(f"Произошла непредвиденная ошибка: {e}")
+
+def find_connections_blind_spots(topic_path, llm_model_name):
+    output_folder = Path(topic_path) / "FACTS" / "ALG_BLIND" / "HYP" 
+    output_folder_lens = Path(topic_path) / "FACTS" / "ALG_BLIND" / "HYP" / "LENS"
+    output_folder_lens.mkdir(parents=True, exist_ok=True)
+
+    folder = Path(f"{topic_path}/DB")
     file_paths = [str(file.resolve()) for file in folder.iterdir() if file.is_file()]
     file_paths.append(f"{topic_path}/ФАКТЫ/db_extension.txt")
     uploaded_files = upload_files(file_paths)
@@ -120,21 +150,19 @@ def find_connections_blind_spots(topic_path, llm_model_name):
                                 temperature=1.5,
                                 web_search=False)
             
-            output_file = output_folder / f"lens_{lens}_blind_spots.txt"
+            output_file = output_folder_lens / f"lens_{lens}_blind_spots.txt"
             save_text(response, output_file)
         else:
+            connect_blind_spots_lenses(lens_folder=output_folder_lens,
+                                       output_file= output_folder / "db_facts.txt")
             return output_file
 
 # --- ПРОВЕРКА ГИПОТЕЗ ---
 def extract_blocks(text, start_tag, end_tag):
     pattern = re.compile(rf"\[{start_tag}\](.*?)\[{end_tag}\]", re.DOTALL)
     return [block.strip() for block in pattern.findall(text)]
-def connect_check_hypothese_results(topic_path):
-    file_hypothesis = f"{topic_path}/ФАКТЫ/db_facts.txt"
-    files_checks = [f"{topic_path}/ФАКТЫ/db_facts_checked_1.txt", 
-                    f"{topic_path}/ФАКТЫ/db_facts_checked_2.txt", 
-                    f"{topic_path}/ФАКТЫ/db_facts_checked_3.txt"]
-    output_file = f"{topic_path}/ФАКТЫ/db_facts_checked.txt"
+def connect_check_hypothese_results(folder_lenses, file_hypothesis, output_file):
+    files_checks = [folder_lenses / f for f in os.listdir(folder_lenses)]
     with open(file_hypothesis, "r", encoding="utf-8") as f:
         hypotheses = extract_blocks(f.read(), "НАЧАЛО ГИПОТЕЗЫ", "КОНЕЦ ГИПОТЕЗЫ")
     all_checks = []
@@ -161,16 +189,19 @@ def connect_check_hypothese_results(topic_path):
     # --- Сохраняем результат ---
     with open(output_file, "w", encoding="utf-8") as f:
         f.write("\n".join(merged_blocks))
-    for file_path in files_checks:
-        if os.path.exists(file_path):
-            os.remove(file_path)
-            print(f"🗑️ Файл '{file_path}' удалён.")
-        else:
-            print(f"⚠️ Файл '{file_path}' не найден, пропускаем.")
+    shutil.rmtree(folder_lenses)
     return True
 
-def check_hypotheses(topic_path, llm_model_name):
-    file_paths = [f"{topic_path}/ФАКТЫ/db_facts.txt"]
+def check_hypotheses(topic_path, llm_model_name, facts_type:Literal["blind_spots","main"]):
+    if facts_type == "main":
+        alg_folder = "ALG_MAIN"
+    else:
+        alg_folder = "ALG_BLIND"
+    output_path_lens = Path(topic_path) / "FACTS" / {alg_folder} / "CHECK" / "LENS"
+    output_path = Path(topic_path) / "FACTS" / {alg_folder} / "CHECK"
+    output_path_lens.mkdir(parents=True, exist_ok=True)
+    file_hypothesis = f"{topic_path}/FACTS/{alg_folder}/HYP/db_facts.txt"
+    file_paths = [file_hypothesis]
     uploaded_files = upload_files(file_paths)
     lens = 0
     while True:
@@ -180,28 +211,31 @@ def check_hypotheses(topic_path, llm_model_name):
             response = call_llm(prompt, files=uploaded_files, 
                                 web_search=True, model_name=llm_model_name,
                                 temperature=0.2)
-            output_file = f"{topic_path}/ФАКТЫ/db_facts_checked_{lens}.txt"
+            output_file = output_path_lens / f"db_facts_checked_{lens}.txt"
             save_text(response, output_file)
-            file_paths.append(f"{topic_path}/ФАКТЫ/db_facts_checked_{lens}.txt")
+            file_paths.append(output_path_lens / f"db_facts_checked_{lens}.txt")
             uploaded_files = upload_files(file_paths)
             print(f"Проверенные гипотезы сохранены в {output_file}")
         else:
             break
-    connect_check_hypothese_results(topic_path)
+    connect_check_hypothese_results(folder_lenses=output_path_lens, 
+                                    file_hypothesis=file_hypothesis,
+                                    output_file=output_path / "db_facts_checked.txt")
     return output_file
 
 
 
 # --- СОЗДАНИЕ СТРУКТУРЫ СЦЕНАРИЯ ---
 def build_script_structure(topic_path, num_series, llm_model_name):
-    output_file_json = f"{topic_path}/СТРУКТУРА/script_structure.json"
-    output_file_txt = f"{topic_path}/СТРУКТУРА/script_structure.txt"
-    folder_path_structure = Path(topic_path)/ "СТРУКТУРА"
+    output_file_json = f"{topic_path}/STRUCTURE/script_structure.json"
+    output_file_txt = f"{topic_path}/STRUCTURE/script_structure.txt"
+    folder_path_structure = Path(topic_path)/ "STRUCTURE"
     folder_path_structure.mkdir(parents=True, exist_ok=True)
 
-    folder = Path(f"{topic_path}/БД")
+    folder = Path(f"{topic_path}/DB")
     file_paths = [str(file.resolve()) for file in folder.iterdir() if file.is_file()]
-    file_paths.append(f"{topic_path}/ФАКТЫ/db_facts_checked.txt")
+    paths_facts = glob.glob(os.path.join(f"{topic_path}/FACTS", "ALG*/CHECK/db_facts_checked.txt"))
+    file_paths.append(paths_facts)
 
     uploaded_files = upload_files(file_paths)
     prompt = get_stage4_prompt(num_series)
@@ -284,8 +318,8 @@ def get_chapters_per_serie_from_file(file_path: str) -> Dict[int, int]:
     return chapters_per_serie, scenario_data
 
 def update_json_structure(topic_path):
-    file_json = f"{topic_path}/СТРУКТУРА/script_structure.json"
-    file_txt = f"{topic_path}/СТРУКТУРА/script_structure.txt"
+    file_json = f"{topic_path}/STRUCTURE/script_structure.json"
+    file_txt = f"{topic_path}/STRUCTURE/script_structure.txt"
     try:
         with open(file_txt, 'r', encoding='utf-8') as f:
             json_string = f.read()
@@ -317,18 +351,19 @@ def update_json_structure(topic_path):
 
 def write_script_text(topic_path, llm_model_name, temperature):
     update_json_structure(topic_path=topic_path)
-    output_file_json=f"{topic_path}/СЦЕНАРИЙ/scenario.json"
-    folder_path_scenario = Path(topic_path)/ "СЦЕНАРИЙ"
+    output_file_json=f"{topic_path}/SCENARIO/scenario.json"
+    folder_path_scenario = Path(topic_path)/ "SCENARIO"
     folder_path_scenario.mkdir(parents=True, exist_ok=True)
     
-    folder_db = Path(topic_path) / "БД"
+    folder_db = Path(topic_path) / "DB"
     file_paths = [str(file.resolve()) for file in folder_db.iterdir() if file.is_file()]
-    file_paths.append(f"{topic_path}/ФАКТЫ/db_facts_checked.txt")
-    file_paths.append(f"{topic_path}/СТРУКТУРА/script_structure.txt")
+    paths_facts = glob.glob(os.path.join(f"{topic_path}/FACTS", "ALG*/CHECK/db_facts_checked.txt"))
+    file_paths.append(paths_facts)
+    file_paths.append(f"{topic_path}/STRUCTURE/script_structure.txt")
     uploaded_files = upload_files(file_paths)
     #uploaded_files = None
 
-    chapters_per_serie, scenario_data = get_chapters_per_serie_from_file(f"{topic_path}/СТРУКТУРА/script_structure.json")
+    chapters_per_serie, scenario_data = get_chapters_per_serie_from_file(f"{topic_path}/STRUCTURE/script_structure.json")
 
     previous_chapter_text = ""
     for s in chapters_per_serie:
@@ -352,7 +387,7 @@ def write_script_text(topic_path, llm_model_name, temperature):
         scripts = [sd.model_dump() for sd in scenario_data]
         save_json(scripts, output_file_json)
         print(f"Структура сценария сохранена в {output_file_json}")
-        scenario_to_docx(f"{topic_path}/СЦЕНАРИЙ")
+        scenario_to_docx(f"{topic_path}/SCENARIO")
     except TypeError as e:
         print(f"❌ Ошибка NoneType: Обнаружено, что 'response.parsed' вернул None. Запускаю сохранение сырого текста.")
     except Exception as e:

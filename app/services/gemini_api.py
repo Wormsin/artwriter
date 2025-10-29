@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 import time
 import random
 from google.api_core.exceptions import ResourceExhausted
+
 load_dotenv()
 
 GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
@@ -13,7 +14,25 @@ if not GEMINI_API_KEY:
     raise ValueError("Set GEMINI_API_KEY environment variable")
 
 client = genai.Client(api_key=GEMINI_API_KEY)
-MODEL_NAME = 'gemini-2.5-flash' 
+MODEL_NAME = 'gemini-2.5-flash'
+
+def retry_on_rate_limit(func, *args, max_retries=3, **kwargs):
+    retries = 0
+    base_delay = 5
+    while retries < max_retries:
+        try:
+            return func(*args, **kwargs)
+        except ResourceExhausted as e:
+            retries += 1
+            if retries >= max_retries:
+                print(f"Достигнут лимит попыток ({max_retries}). Запрос не выполнен.")
+                raise e
+            delay = (base_delay * (2 ** (retries - 1))) + random.uniform(0, 1)
+            print(f"Ошибка 429: Лимит запросов исчерпан (Попытка {retries}/{max_retries}). Ждем {delay:.2f} секунд...")
+            time.sleep(delay)
+        except Exception as e:
+            print(f"Произошла непредвиденная ошибка: {e}")
+            raise e
 
 def upload_files(file_paths):
     uploaded = []
@@ -29,6 +48,7 @@ def upload_files(file_paths):
         file = client.files.upload(file=path, config=dict(mime_type=mime_type))
         uploaded.append(file)
     return uploaded
+
 
 def upload_small_file(file_path):
     if not os.path.exists(file_path):

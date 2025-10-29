@@ -162,7 +162,7 @@ async def save_reports_to_project(
 ) -> List[Dict]:
     results = []
     
-    target_dir = Path(folder_path) / "БД"
+    target_dir = Path(folder_path) / "DB"
     try:
         target_dir.mkdir(parents=True, exist_ok=True)
     except Exception as e:

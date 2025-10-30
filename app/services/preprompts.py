@@ -16,7 +16,6 @@ def get_stage1_prompt():
     return prompt
 
 
-
 # Поиск неочевидных связей
 def get_stage2_prompt_main(lens_num):
     match lens_num:
@@ -204,6 +203,7 @@ def get_stage2_prompt_blind_spots(lens_num):
             return prompt
         case _:
             return None
+
 
 # Проверка гипотез
 def get_stage3_prompt(lens_num):

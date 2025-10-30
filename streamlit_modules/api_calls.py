@@ -1,4 +1,3 @@
-# streamlit_modules/api_calls.py
 import streamlit as st
 import requests
 import os
@@ -21,271 +20,165 @@ def get_protected_headers(jwt_token: str) -> Dict[str, str]:
         "Content-Type": "application/json" 
     }
 
+def _handle_response(response: requests.Response, action: str) -> Dict:
+    """Общий обработчик ответа: проверка статуса и возврат JSON или ошибка."""
+    if response.status_code >= 400:
+        try:
+            detail = response.json()
+        except ValueError:
+            detail = {"error": response.text}
+        
+        if response.status_code == 401:
+            raise APIError(401, "Сессия истекла. Требуется повторный вход.", detail)
+        
+        raise APIError(response.status_code, f"Ошибка при {action}.", detail)
+    
+    try:
+        return response.json()
+    except ValueError:
+        return {"status": "ok", "data": response.text}  # Для non-JSON, если нужно
+
+def _make_request(method: str, url: str, jwt_token: str, payload: Optional[Dict] = None, files: Optional[List] = None) -> Dict:
+    """Универсальный метод для запроса с обработкой ошибок."""
+    headers = get_protected_headers(jwt_token)
+    
+    try:
+        if method.upper() == "GET" and payload:
+            # Для GET используем params вместо body
+            response = requests.get(url, params=payload, headers=headers)
+        elif files:
+            # Multipart для файлов
+            response = requests.post(url, data=payload if payload else {}, files=files, headers={k: v for k, v in headers.items() if k != "Content-Type"})
+        else:
+            response = requests.request(method, url, json=payload, headers=headers)
+        
+        return _handle_response(response, method.lower() + " " + url.split("/")[-1])
+    
+    except requests.exceptions.ConnectionError:
+        raise ConnectionError("Не удалось подключиться к серверу API.")
+    except requests.exceptions.RequestException as e:
+        raise APIError(500, f"Ошибка сети при запросе: {e}", None)
+
 # --- 1. СОЗДАНИЕ ПРОЕКТА ---
 def create_project(jwt_token: str, topic_name: str) -> Dict:
+    """Создает новый проект."""
     payload = {"topic_name": topic_name}
-    headers = get_protected_headers(jwt_token)
-
-    try:
-        response = requests.post(
-            f"{FASTAPI_BASE_URL}/data/projects/create", 
-            json=payload, 
-            headers=headers
-        )
-        
-        # Если статус 4xx/5xx, поднимаем исключение APIError
-        if response.status_code >= 400:
-            detail = response.json()
-            # Особая обработка 401 для удобства в UI
-            if response.status_code == 401:
-                 raise APIError(401, "Недействительный или просроченный токен.", detail)
-            
-            raise APIError(response.status_code, "Ошибка при создании проекта.", detail)
-        
-        # Если статус 2xx, возвращаем результат
-        return response.json()
-
-    except requests.exceptions.ConnectionError:
-        # Для ошибок соединения поднимаем стандартное исключение
-        raise ConnectionError("Не удалось подключиться к серверу API.")
+    return _make_request("POST", f"{FASTAPI_BASE_URL}/data/projects/create", jwt_token, payload)
 
 
 # --- 2. ПОЛУЧЕНИЕ ПРОЕКТОВ ---
 @st.cache_data(ttl=600)
 def get_user_projects(jwt_token: str) -> List[Dict]:
-    PROJECTS_URL = f"{FASTAPI_BASE_URL}/data/myprojects" # Исправил /data/myprojects на /data/projects/my
-    headers = get_protected_headers(jwt_token)
+    """Получает список доступных проектов пользователя."""
+    return _make_request("GET", f"{FASTAPI_BASE_URL}/data/myprojects", jwt_token)
 
-    try:
-        response = requests.get(PROJECTS_URL, headers=headers)
-        
-        if response.status_code >= 400:
-            detail = response.json()
-            if response.status_code == 401:
-                 raise APIError(401, "Сессия истекла. Требуется повторный вход.", detail)
-            
-            raise APIError(response.status_code, "Ошибка при загрузке проектов.", detail)
-            
-        return response.json()
-        
-    except requests.exceptions.ConnectionError:
-        raise ConnectionError("Не удалось подключиться к серверу API.")
+def share_project_access(jwt_token: str, project_id: int, target_username: str, permission_level: str) -> Dict:
+    """Предоставляет доступ к проекту."""
+    payload = {"project_id": project_id, "target_username": target_username, "permission_level": permission_level}
+    return _make_request("POST", f"{FASTAPI_BASE_URL}/data/projects/share", jwt_token, payload)
 
-def share_project_access(jwt_token: str, project_id: int, target_username: str, permission_level: str):
-    payload = {"project_id": project_id, "target_username":target_username, "permission_level":permission_level}
-    headers = get_protected_headers(jwt_token)
+# --- 4. WORKFLOWS (LLM) ---
+def expand_db(jwt_token: str, folder_path: str, project_id: int, llm_model: str) -> Dict:
+    """Расширяет базу данных."""
+    payload = {"folder_path": folder_path, "llm_model": llm_model}
+    return _make_request("POST", f"{FASTAPI_BASE_URL}/workflow/{project_id}/facts/expand", jwt_token, payload)
+
+def find_facts(jwt_token: str, folder_path: str, project_id: int, llm_model: str) -> Dict:
+    """Ищет факты и связи."""
+    payload = {"folder_path": folder_path, "llm_model": llm_model}
+    return _make_request("POST", f"{FASTAPI_BASE_URL}/workflow/{project_id}/facts/search", jwt_token, payload)
+
+def check_hypothesis(jwt_token: str, folder_path: str, project_id: int, llm_model: str, facts_type: str = "main") -> Dict:
+    """Проверяет гипотезы."""
+    payload = {"folder_path": folder_path, "llm_model": llm_model}
+    return _make_request("POST", f"{FASTAPI_BASE_URL}/workflow/{project_id}/facts/check", jwt_token, payload, facts_type=facts_type)  # facts_type как query param, если нужно
+
+def create_scenario_structure(jwt_token: str, folder_path: str, project_id: int, num_series: int, llm_model: str) -> Dict:
+    """Создает структуру сценария."""
+    payload = {"folder_path": folder_path, "llm_model": llm_model, "num_series": num_series}
+    return _make_request("POST", f"{FASTAPI_BASE_URL}/workflow/{project_id}/scenario/structure", jwt_token, payload)
+
+def create_scenario(jwt_token: str, folder_path: str, project_id: int, llm_model: str, temperature: float) -> Dict:
+    """Создает текст сценария."""
+    payload = {"folder_path": folder_path, "llm_model": llm_model, "temperature": temperature}
+    return _make_request("POST", f"{FASTAPI_BASE_URL}/workflow/{project_id}/scenario", jwt_token, payload)
+
+
+
+# --- 5. ЗАГРУЗКА ФАЙЛОВ ---
+def upload_reports_to_api(jwt_token: str, project_id: int, folder_path: str, uploaded_files: List) -> Dict:
+    """Загружает отчеты как multipart/form-data."""
+    headers = {k: v for k, v in get_protected_headers(jwt_token).items() if k != "Content-Type"}  # Убираем Content-Type для multipart
+    files_to_send = [('files', (f.name, f.getvalue(), f.type)) for f in uploaded_files]
+    data = {"folder_path": folder_path}
+    
     try:
         response = requests.post(
-            f"{FASTAPI_BASE_URL}/data/projects/share", 
-            json=payload, 
+            f"{FASTAPI_BASE_URL}/data/projects/{project_id}/upload-reports",
+            data=data,
+            files=files_to_send,
             headers=headers
         )
-        if response.status_code >= 400:
-            detail = response.json()
-            # Особая обработка 401 для удобства в UI
-            if response.status_code == 401:
-                 raise APIError(401, "Недействительный или просроченный токен.", detail)
-            
-            raise APIError(response.status_code, "Ошибка при создании проекта.", detail)
-        
-        # Если статус 2xx, возвращаем результат
-        return response.json()
-
-    except requests.exceptions.ConnectionError:
-        # Для ошибок соединения поднимаем стандартное исключение
-        raise ConnectionError("Не удалось подключиться к серверу API.")
-
-
-
-
-def expand_db(jwt_token: str, folder_path: str, project_id:int, llm_model:str):
-    payload = {
-        "folder_path": folder_path,
-        "llm_model": llm_model
-    }
-    headers = {
-        "Authorization": f"Bearer {jwt_token}",
-        "Content-Type": "application/json" 
-    }
-    try:
-        response = requests.post(f"{FASTAPI_BASE_URL}/workflow/{project_id}/facts/expand", json=payload, headers=headers)
-        response.raise_for_status() # Вызовет ошибку для HTTP 4xx/5xx
-        return response.json()
-    except requests.exceptions.HTTPError as e:
-        st.error(f"❌ Ошибка HTTP: Проверьте логи FastAPI. {e}")
-        raise
-    except requests.exceptions.ConnectionError:
-        st.error("❌ Ошибка соединения: Убедитесь, что ваш FastAPI запущен и доступен.")
-        raise
-    except Exception as e:
-        st.error(f"❌ Произошла непредвиденная ошибка: {e}")
-        raise
-
-def search_facts(jwt_token: str, folder_path: str,  project_id:int, llm_model:str):
-    payload = {
-        "folder_path": folder_path,
-        "llm_model": llm_model
-    }
-    headers = {
-        "Authorization": f"Bearer {jwt_token}",
-        "Content-Type": "application/json" 
-    }
-    try:
-        response = requests.post(f"{FASTAPI_BASE_URL}/workflow/{project_id}/facts/search", json=payload, headers=headers)
-        response.raise_for_status() # Вызовет ошибку для HTTP 4xx/5xx
-        return response.json()
-    except requests.exceptions.HTTPError as e:
-        st.error(f"❌ Ошибка HTTP: Проверьте логи FastAPI. {e}")
-        raise
-    except requests.exceptions.ConnectionError:
-        st.error("❌ Ошибка соединения: Убедитесь, что ваш FastAPI запущен и доступен.")
-        raise
-    except Exception as e:
-        st.error(f"❌ Произошла непредвиденная ошибка: {e}")
-        raise
-
-def check_facts(jwt_token: str, folder_path: str,  project_id:int, llm_model:str):
-    payload = {
-        "folder_path": folder_path,
-        "llm_model": llm_model
-    }
-    headers = {
-        "Authorization": f"Bearer {jwt_token}",
-        "Content-Type": "application/json" 
-    }
-    try:
-        response = requests.post(f"{FASTAPI_BASE_URL}/workflow/{project_id}/facts/check", json=payload, headers=headers)
-        response.raise_for_status() # Вызовет ошибку для HTTP 4xx/5xx
-        return response.json()
-    except requests.exceptions.HTTPError as e:
-        st.error(f"❌ Ошибка HTTP: Проверьте логи FastAPI. {e}")
-        raise
-    except requests.exceptions.ConnectionError:
-        st.error("❌ Ошибка соединения: Убедитесь, что ваш FastAPI запущен и доступен.")
-        raise
-    except Exception as e:
-        st.error(f"❌ Произошла непредвиденная ошибка: {e}")
-        raise
-
-def generate_structure(jwt_token: str, folder_path: str,  project_id:int, num_series: int, llm_model:str):
-    payload = {
-        "folder_path": folder_path,
-        "llm_model": llm_model,
-        "num_series": num_series
-    }
-    headers = {
-        "Authorization": f"Bearer {jwt_token}",
-        "Content-Type": "application/json" 
-    }
-    try:
-        response = requests.post(f"{FASTAPI_BASE_URL}/workflow/{project_id}/scenario/structure", json=payload, headers=headers)
-        response.raise_for_status() # Вызовет ошибку для HTTP 4xx/5xx
-        return response.json()
-    except requests.exceptions.HTTPError as e:
-        st.error(f"❌ Ошибка HTTP: Проверьте логи FastAPI. {e}")
-        raise
-    except requests.exceptions.ConnectionError:
-        st.error("❌ Ошибка соединения: Убедитесь, что ваш FastAPI запущен и доступен.")
-        raise
-    except Exception as e:
-        st.error(f"❌ Произошла непредвиденная ошибка: {e}")
-        raise
-
-def write_scenario(jwt_token: str, folder_path: str,  project_id:int, temperature: float, llm_model:str):
-    payload = {
-        "folder_path": folder_path,
-        "llm_model": llm_model,
-        "temperature": temperature
-    }
-    headers = {
-        "Authorization": f"Bearer {jwt_token}",
-        "Content-Type": "application/json" 
-    }
-    try:
-        response = requests.post(f"{FASTAPI_BASE_URL}/workflow/{project_id}/scenario", json=payload, headers=headers)
-        response.raise_for_status() # Вызовет ошибку для HTTP 4xx/5xx
-        return response.json()
-    except requests.exceptions.HTTPError as e:
-        st.error(f"❌ Ошибка HTTP: Проверьте логи FastAPI. {e}")
-        raise
-    except requests.exceptions.ConnectionError:
-        st.error("❌ Ошибка соединения: Убедитесь, что ваш FastAPI запущен и доступен.")
-        raise
-    except Exception as e:
-        st.error(f"❌ Произошла непредвиденная ошибка: {e}")
-        raise
-
-
-def upload_reports_to_api(jwt_token: str, project_id: int, folder_path:str, uploaded_files: List) -> Dict:
-    headers = {
-        "Authorization": f"Bearer {jwt_token}",
-    }
-
-    files_to_send = []
-    for f in uploaded_files:
-        files_to_send.append(('files', (f.name, f.getvalue(), f.type)))
-
-    data = {"folder_path": folder_path}
-
-    try:
-        # requests автоматически обрабатывает 'data' и 'files' как multipart/form-data
-        response = requests.post(f"{FASTAPI_BASE_URL}/data/projects/{project_id}/upload-reports", headers=headers, data = data, files=files_to_send)
-        
-        if response.status_code >= 400:
-            detail = response.json()
-            if response.status_code == 401:
-                 raise APIError(401, "Сессия истекла. Требуется повторный вход.", detail)
-            
-            raise APIError(response.status_code, "Ошибка при загрузке файлов.", detail)
-        
-        return response.json()
-
+        return _handle_response(response, "upload")
     except requests.exceptions.ConnectionError:
         raise ConnectionError("Не удалось подключиться к серверу API.")
-    
 
-def fetch_file(jwt_token:str, stage_name: str, project_id:int, folder_path:str):
+# --- 6. РАБОТА С ФАЙЛАМИ ---
+def fetch_file(jwt_token: str, stage_name: str, project_id: int, folder_path: str) -> Optional[Dict]:
     """Получает контент файла с сервера."""
-    data = {"folder_path": folder_path}
-    headers = {
-        "Authorization": f"Bearer {jwt_token}",
-    }
+    params = {"folder_path": folder_path}
     try:
-        response = requests.get(f"{FASTAPI_BASE_URL}/files/{project_id}/{stage_name}", json =data, headers=headers)
-        response.raise_for_status() # Вызывает исключение для статусов 4xx/5xx
-        return response.json()
-    except requests.exceptions.RequestException as e:
+        return _make_request("GET", f"{FASTAPI_BASE_URL}/files/{project_id}/{stage_name}", jwt_token, params)
+    except APIError as e:
         st.error(f"Ошибка при загрузке файла: {e}")
         return None
 
-def save_file(jwt_token:str, stage_name: str, project_id:int, content: str, folder_path:str):
+def save_file(jwt_token: str, stage_name: str, project_id: int, content: str, folder_path: str) -> Dict:
     """Сохраняет обновленный контент на сервере."""
-    payload = {
-        "folder_path": folder_path,
-        "stage_name": stage_name,
-        "content": content 
-    }
-    headers = {
-        "Authorization": f"Bearer {jwt_token}",
-    }
-    try:
-        response = requests.post(f"{FASTAPI_BASE_URL}/files/update/{project_id}", json=payload, headers=headers)
-        response.raise_for_status()
-        st.success("✅ Файл успешно сохранен на сервере!")
-    except requests.exceptions.RequestException as e:
-        st.error(f"Ошибка при сохранении файла: {e}")
+    payload = {"folder_path": folder_path, "stage_name": stage_name, "content": content}
+    result = _make_request("POST", f"{FASTAPI_BASE_URL}/files/update/{project_id}", jwt_token, payload)
+    st.success("✅ Файл успешно сохранен на сервере!")
+    return result
 
+# --- 7. СПИСОК АЛГОРИТМОВ ---
+def get_algorithms(jwt_token: str, project_id: int, folder_path: str) -> List[str]:
+    """Получает список алгоритмов (ALG_* папки)."""
+    params = {"folder_path": folder_path}
+    return _make_request("GET", f"{FASTAPI_BASE_URL}/files/algorithms/{project_id}", jwt_token, params)
 
-def download_scenario_docx(jwt_token:str, project_id:int, folder_path:str) -> Optional[bytes]:
+# --- 8. СКАЧИВАНИЕ АРХИВОВ ---
+def download_scenario_docx(jwt_token: str, project_id: int, folder_path: str) -> Optional[bytes]:
     """Скачивает ZIP с .docx файлами сценария."""
-    data = {"folder_path": folder_path}
-    headers = {
-        "Authorization": f"Bearer {jwt_token}",
-    }
+    params = {"folder_path": folder_path}
     try:
-        response = requests.get(f"{FASTAPI_BASE_URL}/files/download/scenario/{project_id}", json =data, headers=headers)
-        response.raise_for_status() # Вызывает исключение для статусов 4xx/5xx
+        response = requests.get(
+            f"{FASTAPI_BASE_URL}/files/download/scenario/{project_id}",
+            params=params,
+            headers=get_protected_headers(jwt_token)
+        )
+        _handle_response(response, "download scenario")  # Проверяем статус
         return response.content
-    except requests.exceptions.RequestException as e:
+    except APIError as e:
         st.error(f"Ошибка при скачивании файлов сценария: {e}")
+        return None
+    except requests.exceptions.RequestException as e:
+        st.error(f"Ошибка сети при скачивании: {e}")
+        return None
+
+def download_lens_zip(jwt_token: str, project_id: int, folder_path: str) -> Optional[bytes]:
+    """Скачивает ZIP файлов из LENS папки."""
+    params = {"folder_path": folder_path}
+    try:
+        response = requests.get(
+            f"{FASTAPI_BASE_URL}/files/download/lens/{project_id}",
+            params=params,
+            headers=get_protected_headers(jwt_token)
+        )
+        _handle_response(response, "download lens")
+        return response.content
+    except APIError as e:
+        st.error(f"Ошибка при скачивании LENS архива: {e}")
+        return None
+    except requests.exceptions.RequestException as e:
+        st.error(f"Ошибка сети при скачивании: {e}")
         return None

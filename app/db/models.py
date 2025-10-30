@@ -1,9 +1,13 @@
 from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Table, Boolean
-from sqlalchemy.dialects.postgresql import ARRAY
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from . db import Base
 from datetime import datetime
 from sqlalchemy.orm import relationship
 from typing import Literal
+import logging
+
+
+logger = logging.getLogger(__name__)
 
 
 # --- 1. Таблица Пользователей ---
@@ -14,6 +18,9 @@ class User(Base):
     username = Column(String, unique=True, index=True, nullable=False)
     hashed_password = Column(String, nullable=False)
     is_active = Column(Boolean, default=True)
+    # Новое поле: словарь использования токенов по месяцам (JSONB для PostgreSQL)
+    # Формат: {"YYYY-MM": tokens, ...}, обновляется ежемесячно
+    token_usage = Column(JSONB, default=dict, nullable=False)
 
     # Отношение: один пользователь может владеть многими проектами
     projects_owned = relationship("Project", back_populates="owner")
@@ -57,7 +64,3 @@ class ProjectAccess(Base):
     # Отношения
     project = relationship("Project", back_populates="accessors")
     user = relationship("User", back_populates="access_rights")
-
-
-
-

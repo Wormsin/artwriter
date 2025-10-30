@@ -6,10 +6,12 @@ load_dotenv()
 # 1. Импорт модулей
 from streamlit_modules.auth import show_auth_flow, handle_logout
 from streamlit_modules.main_ui import show_main_app
-from streamlit_modules.auth import handle_logout
-from streamlit_modules.utils import handle_editing, show_edit_mode, return_to_main_page
+from streamlit_modules.stage1_ui import show_expand_db_ui
+from streamlit_modules.stage2_ui import show_facts_ui
+from streamlit_modules.stage3_ui import show_structure_ui
+from streamlit_modules.stage4_ui import show_scenario_ui
 
-# 2. Инициализация глобального состояния (должна быть самой первой)
+# 2. Инициализация глобального состояния (только используемые)
 if 'authenticated' not in st.session_state:
     st.session_state.authenticated = False
 if 'jwt_token' not in st.session_state:
@@ -19,14 +21,14 @@ if 'active_project_id' not in st.session_state:
 if 'active_project_name' not in st.session_state:
     st.session_state.active_project_name = ""
 if 'active_project_folder' not in st.session_state:
-        st.session_state.active_project_folder = None
-if 'current_stage_editing' not in st.session_state:
-        st.session_state.current_stage_editing = None
-if 'file_content_editing' not in st.session_state:
-        st.session_state.file_content_editing = ""
-if 'page' not in st.session_state:
-        st.session_state.page = "main"
-
+    st.session_state.active_project_folder = None
+if 'current_stage' not in st.session_state:
+    st.session_state.current_stage = "projects"  # Дефолт: проекты
+if 'GEMINI_MODELS' not in st.session_state:
+    st.session_state.GEMINI_MODELS = ["gemini-2.5-flash", 
+    "gemini-2.5-pro", 
+    "gemini-2.5-flash-lite",
+    "gemini-2.5-nano"]
 
 # --- ГЛАВНАЯ ЛОГИКА ---
 
@@ -37,21 +39,57 @@ def main():
     if st.session_state.authenticated:
         st.title("📓 ARTwriter")
 
+        # Sidebar с навигацией по этапам
         with st.sidebar:
-            st.button("🏰 Главная", on_click=return_to_main_page, type="secondary")
-            st.button("📜 Редактировать", on_click=handle_editing, type="secondary")
+            st.header("📋 Навигация")
+            
+            # Кнопка Главная (проекты)
+            if st.button("🏠 Главная (Проекты)", key="nav_projects"):
+                st.session_state.current_stage = "projects"
+                st.rerun()
+            
+            st.markdown("---")
+            st.header("Этапы Workflow")
+            
+            # Кнопки для этапов
+            if st.button("📊 Этап 1: Расширение БД", key="nav_expand_db"):
+                st.session_state.current_stage = "expand_db"
+                st.rerun()
+            
+            if st.button("🔍 Этап 2: Поиск Связей", key="nav_facts_search"):
+                st.session_state.current_stage = "facts_search"
+                st.rerun()
+            
+            #if st.button("✅ Этап 3: Проверка Гипотез", key="nav_facts_check"):
+            #    st.session_state.current_stage = "facts_check"
+            #    st.rerun()
+            
+            if st.button("📋 Этап 4: Структура Сценария", key="nav_structure"):
+                st.session_state.current_stage = "structure"
+                st.rerun()
+            
+            if st.button("✍️ Этап 5: Написание Сценария", key="nav_scenario"):
+                st.session_state.current_stage = "scenario"
+                st.rerun()
+            
             st.markdown("---")
             st.button("💀 Выйти", on_click=handle_logout, type="secondary")
-        if st.session_state.page == "main":
-            show_main_app()
-        if st.session_state.page == "edit":
-            if st.session_state.active_project_id:
-                show_edit_mode()
-            else:
-                st.error("⚠️ **Ошибка доступа к редактированию.**")
-                st.warning("Пожалуйста, **создайте** или **выберите** активный проект, прежде чем переходить в режим редактирования файлов.")
-                st.session_state.page = "main" 
-                st.experimental_rerun()
+        
+        # Вызов UI в зависимости от current_stage
+        if st.session_state.current_stage == "projects":
+            show_main_app()  # Показывает вкладки проектов/шаринга
+        elif st.session_state.current_stage == "expand_db":
+            show_expand_db_ui()
+        elif st.session_state.current_stage == "facts_search":
+            show_facts_ui()
+        elif st.session_state.current_stage == "structure":
+            show_structure_ui()
+        elif st.session_state.current_stage == "scenario":
+            show_scenario_ui()
+        else:
+            st.error("Неизвестный этап.")
+            st.session_state.current_stage = "projects"
+            st.rerun()
     else:
         # Если не авторизован: показываем формы входа/регистрации
         show_auth_flow()

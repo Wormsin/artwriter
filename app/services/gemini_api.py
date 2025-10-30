@@ -1,4 +1,5 @@
 import os
+import logging
 from google import genai
 from google.genai import types
 import pathlib
@@ -7,6 +8,9 @@ import time
 import random
 from google.api_core.exceptions import ResourceExhausted
 
+
+logger = logging.getLogger(__name__)
+
 load_dotenv()
 
 GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
@@ -14,9 +18,16 @@ if not GEMINI_API_KEY:
     raise ValueError("Set GEMINI_API_KEY environment variable")
 
 client = genai.Client(api_key=GEMINI_API_KEY)
-MODEL_NAME = 'gemini-2.5-flash'
+MODEL_NAME = 'gemini-2.5-flash' 
+
 
 def retry_on_rate_limit(func, *args, max_retries=3, **kwargs):
+    """
+    Общая функция для обработки ошибок с ретраями для 429.
+    Вызывает функцию func с аргументами и возвращает её результат.
+    При ошибке 429 выполняет ретраи с экспоненциальной задержкой.
+    Если все ретраи исчерпаны, поднимает исключение.
+    """
     retries = 0
     base_delay = 5
     while retries < max_retries:
@@ -25,14 +36,15 @@ def retry_on_rate_limit(func, *args, max_retries=3, **kwargs):
         except ResourceExhausted as e:
             retries += 1
             if retries >= max_retries:
-                print(f"Достигнут лимит попыток ({max_retries}). Запрос не выполнен.")
+                logger.error(f"Достигнут лимит попыток ({max_retries}). Запрос не выполнен.")
                 raise e
             delay = (base_delay * (2 ** (retries - 1))) + random.uniform(0, 1)
-            print(f"Ошибка 429: Лимит запросов исчерпан (Попытка {retries}/{max_retries}). Ждем {delay:.2f} секунд...")
+            logger.warning(f"Ошибка 429: Лимит запросов исчерпан (Попытка {retries}/{max_retries}). Ждем {delay:.2f} секунд...")
             time.sleep(delay)
         except Exception as e:
-            print(f"Произошла непредвиденная ошибка: {e}")
+            logger.error(f"Произошла непредвиденная ошибка: {e}")
             raise e
+
 
 def upload_files(file_paths):
     uploaded = []
@@ -68,88 +80,90 @@ def upload_small_file(file_path):
     return [file]
 
 
-def call_llm(prompt, files=None, model_name=MODEL_NAME, 
-             web_search = False, thinking = True, temperature=1, max_output_tokens=10000):
-    content = [prompt]
-    tools = []
-    thinking_budget = 1024
-    if files:
-        content.extend(files)
-    if web_search:
-        grounding_tool = types.Tool(
-        google_search=types.GoogleSearch()
-        )
-        tools = [grounding_tool]
-    if not thinking:
-        thinking_budget=0
-    config = types.GenerateContentConfig(
-        temperature=temperature,
-        max_output_tokens=max_output_tokens,
-        tools=tools,
-        thinking_config=types.ThinkingConfig(thinking_budget=thinking_budget)
-)
-    max_retries = 5
-    base_delay=5
-    retries = 0
-    while retries < max_retries:
-        try:
-            response = client.models.generate_content(
-                model = model_name,
-                contents = content,
-                config=config,
-            )
-            return response.text
-        except ResourceExhausted as e:
-            # Перехватываем ошибку 429
-            print(f"Ошибка 429: Лимит запросов исчерпан (Попытка {retries + 1}/{max_retries}).")
-            
-            if retries == max_retries - 1:
-                print("Достигнут лимит попыток. Запрос не выполнен.")
-                raise e
-            # Расчет времени ожидания: base_delay * (2^retries) + (0-1 сек "джиттера")
-            # "Джиттер" (случайная добавка) помогает избежать "стадного эффекта",
-            # когда все клиенты повторяют запрос в одно и то же время.
-            delay = (base_delay * (2 ** retries)) + random.uniform(0, 1)
-            
-            print(f"Ждем {delay:.2f} секунд перед следующей попыткой...")
-            time.sleep(delay)
-            
-            # Увеличиваем счетчик попыток
-            retries += 1
-            
-        except Exception as e:
-            # Обработка других, не связанных с лимитами, ошибок
-            print(f"Произошла непредвиденная ошибка: {e}")
-            # При других ошибках (например, ошибка аутентификации) повторять нет смысла
-            break
-
-def structured_call_llm(prompt,structure, files=None, model_name=MODEL_NAME, temperature=0.7, max_output_tokens=4096):
-    content = [prompt]
-    if files:
-        content.extend(files)
-    config = types.GenerateContentConfig(
-        temperature=temperature,
-        max_output_tokens=max_output_tokens,
-        response_schema = structure,
-        response_mime_type = 'application/json'
-    )
+def _generate_content(model_name, contents, config):
+    """Внутренняя функция для генерации контента с обработкой токенов."""
     response = client.models.generate_content(
-        model = model_name,
-        contents = content,
+        model=model_name,
+        contents=contents,
         config=config,
     )
     if response.usage_metadata:
-        # 2. Извлечение числа токенов для ОТВЕТА (выходные токены)
-        output_tokens = response.usage_metadata.candidates_token_count
-        # 3. Извлечение числа токенов для ПРОМПТА (входные токены)
-        input_tokens = response.usage_metadata.prompt_token_count
-        # 4. Извлечение общего числа токенов
         total_tokens = response.usage_metadata.total_token_count
-        print(f"✅ Генерация завершена. Сгенерировано {len(response.text)} символов.")
-        print("--- Использование токенов ---")
-        print(f"Входных токенов (Промпт + Файлы): {input_tokens}")
-        print(f"Выходных токенов (Ответ LLM): {output_tokens}")
-        print(f"Всего токенов: {total_tokens}")
+        logger.info(f"✅ Генерация завершена. Сгенерировано {len(response.text)} символов.")
+        logger.info("--- Использование токенов ---")
+        logger.info(f"Входных токенов (Промпт + Файлы): {response.usage_metadata.prompt_token_count}")
+        logger.info(f"Выходных токенов (Ответ LLM): {response.usage_metadata.candidates_token_count}")
+        logger.info(f"Всего токенов: {total_tokens}")
     else:
-        print("ℹ️ Метаданные об использовании токенов не найдены в ответе.")
-    return response
+        logger.warning("ℹ️ Метаданные об использовании токенов не найдены в ответе.")
+        total_tokens = None
+    return response, total_tokens
+
+
+def call_llm(prompt, files=None, model_name=MODEL_NAME, 
+             web_search=False, thinking=True, temperature=1, max_output_tokens=10000):
+    """
+    Вызов LLM с возвратом статуса, ответа и токенов.
+    Возвращает: (status: str, response: str or None, tokens: int or None)
+    status: 'success' или 'error: description'
+    """
+    try:
+        content = [prompt]
+        tools = []
+        thinking_budget = 1024 if thinking else 0
+        if files:
+            content.extend(files)
+        if web_search:
+            grounding_tool = types.Tool(
+                google_search=types.GoogleSearch()
+            )
+            tools = [grounding_tool]
+        config = types.GenerateContentConfig(
+            temperature=temperature,
+            max_output_tokens=max_output_tokens,
+            tools=tools,
+            thinking_config=types.ThinkingConfig(thinking_budget=thinking_budget)
+        )
+        
+        # Используем общую функцию ретраев
+        response, total_tokens = retry_on_rate_limit(
+            _generate_content, model_name, content, config
+        )
+        
+        return "success", response.text, total_tokens
+        
+    except Exception as e:
+        error_msg = f"Ошибка при вызове LLM: {str(e)}"
+        logger.error(error_msg)
+        return "error: " + error_msg, None, None
+
+
+def structured_call_llm(prompt, structure, files=None, model_name=MODEL_NAME, temperature=0.7, max_output_tokens=4096):
+    """
+    Структурированный вызов LLM с возвратом статуса, ответа и токенов.
+    Возвращает: (status: str, response: dict or None, tokens: int or None)
+    response: распарсенный JSON или None
+    """
+    try:
+        content = [prompt]
+        if files:
+            content.extend(files)
+        config = types.GenerateContentConfig(
+            temperature=temperature,
+            max_output_tokens=max_output_tokens,
+            response_schema=structure,
+            response_mime_type='application/json'
+        )
+        
+        # Используем общую функцию ретраев
+        response, total_tokens = retry_on_rate_limit(
+            _generate_content, model_name, content, config
+        )
+        
+        
+        return "success", response, total_tokens
+        
+    except Exception as e:
+        error_msg = f"Ошибка при структурированном вызове LLM: {str(e)}"
+        logger.error(error_msg)
+        return "error: " + error_msg, None, None

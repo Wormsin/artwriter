@@ -1,21 +1,17 @@
-# streamlit_modules/main_ui.py
 import streamlit as st
 from streamlit_modules.api_calls import (
-    get_user_projects, create_project, expand_db, search_facts, 
-    check_facts, generate_structure, write_scenario, APIError,share_project_access, 
-    upload_reports_to_api, download_scenario_docx
+    get_user_projects, create_project, expand_db, find_facts, check_hypothesis,
+    create_scenario_structure, create_scenario, upload_reports_to_api,
+    download_scenario_docx, get_algorithms, APIError, share_project_access
 )
-
-GEMINI_MODELS = [
-    "gemini-2.5-flash", 
-    "gemini-2.5-pro", 
-    "gemini-2.5-flash-lite",
-    "gemini-2.5-nano"
-]
 
 
 def show_main_app():
-    is_project_active = st.session_state.active_project_folder is not None
+    # Проверка аутентификации
+    if not st.session_state.get('authenticated', False) or not st.session_state.get('jwt_token'):
+        st.error("❌ Требуется авторизация. Перейдите на страницу входа.")
+        st.stop()
+    
     
     st.header("Выбор или Создание Проекта")
     tab01, tab02 = st.tabs([
@@ -150,164 +146,3 @@ def show_main_app():
                 st.info("Сначала выберите проект из списка или создайте новый, чтобы расшарить его.")
      
     st.markdown("---")
-
-    if is_project_active:
-        st.header("Этапы создания сценария")
-        st.success(f"Активный проект: {st.session_state.active_project_name}")
-        
-        tab2, tab3, tab4, tab5 = st.tabs([
-            "🪬 Расширение БД", 
-            "⛓️ Поиск Связей", 
-            "🦴 Структура Сценария", 
-            "🚬 Написание Сценария"
-        ])
-
-        # --- Вкладка 2: Расширение БД ---
-        with tab2:
-            #st.header("Расширение Базы Данных")
-            st.write("Добавляет дополнительную информацию в базу знаний проекта.")
-
-            uploaded_files = st.file_uploader(
-                "Выберите один или несколько файлов для загрузки", 
-                type=['pdf', 'txt'], 
-                accept_multiple_files=True 
-                )
-            if uploaded_files: # Теперь это список!
-                if st.button(f"Загрузить {len(uploaded_files)} файл(ов) в проект"):
-                    try:
-                        with st.spinner(f"Загрузка {len(uploaded_files)} файлов..."):
-                            # Вызов новой функции API
-                            result = upload_reports_to_api(
-                                st.session_state.jwt_token,
-                                st.session_state.active_project_id,
-                                st.session_state.active_project_folder,
-                                uploaded_files # Передаем список
-                            )
-                        
-                        st.success(f"🦇 Загрузка завершена! Успешно сохранено файлов: {len(result.get('results', []))}.")
-                        st.json(result)
-                    except Exception:
-                        pass  # Errors handled in api_calls
-            
-            selected_llm_name = st.selectbox(
-            "Выберите модель Gemini для генерации сценария:",
-            options=GEMINI_MODELS,
-            index=0,
-            key="btn2_model"
-            )
-            if st.button("Расширить БД", key='btn2'):
-                try:
-                    with st.spinner(f'Собираю данные для проекта "{st.session_state.active_project_name}"...'):
-                        result = expand_db(st.session_state.jwt_token, 
-                                           st.session_state.active_project_folder,
-                                           st.session_state.active_project_id,
-                                           selected_llm_name
-                                           )
-                        # Обработка успешного ответа
-                        st.success(f"🦇 Данные успешно собраны.")
-                        st.json(result) # Показать ответ от FastAPI
-                except Exception:
-                    pass  # Errors handled in api_calls
-
-        # --- Вкладка 3: Поиск Фактов ---
-        with tab3:
-            #st.header("Поиск Фактов")
-            st.write("Ищет неочевидные связи в исторических событиях, стоит гепотезы.")
-            selected_llm_name = st.selectbox(
-            "Выберите модель Gemini для генерации сценария:",
-            options=GEMINI_MODELS,
-            index=0,
-            key="btn3_model"
-            )
-            topic_folder = st.session_state.active_project_folder
-            if st.button("Найти Факты", key='btn3'):
-                try:
-                    with st.spinner(f'Ищу факты "{topic_folder}"...'):
-                        result = search_facts(st.session_state.jwt_token, 
-                                              topic_folder, 
-                                              st.session_state.active_project_id,
-                                              selected_llm_name)
-                        # Обработка успешного ответа
-                        st.success(f"🦇 Факты успешно найдены.")
-                        st.json(result) # Показать ответ от FastAPI
-                except Exception:
-                    pass  # Errors handled in api_calls
-            
-            selected_llm_name = st.selectbox(
-            "Выберите модель Gemini для генерации сценария:",
-            options=GEMINI_MODELS,
-            index=0,
-            key="btn4_model"
-            )
-            if st.button("Проверить Факты", key='btn4'):
-                try:
-                    with st.spinner(f'Проверяю факты "{topic_folder}"...'):
-                        result = check_facts(st.session_state.jwt_token, 
-                                             topic_folder, 
-                                             st.session_state.active_project_id,
-                                             selected_llm_name)
-                        # Обработка успешного ответа
-                        st.success(f"🦇 Факты успешно проверены.")
-                        st.json(result) # Показать ответ от FastAPI
-                except Exception:
-                    pass  # Errors handled in api_calls
-
-    
-        # --- Вкладка 4: Структура Сценария ---
-        with tab4:
-            #st.header("Написание Структуры Сценария")
-            st.write("Генерирует структуру сценария.")
-            
-            selected_llm_name = st.selectbox(
-            "Выберите модель Gemini для генерации сценария:",
-            options=GEMINI_MODELS,
-            index=0,
-            key="btn5_model"
-            )
-            num_acts = st.number_input("Количесво серий:", min_value=1, step=1, format="%d" )
-            if st.button("Сгенерировать Структуру", key='btn5'):
-                try:
-                    with st.spinner(f'Создаю структуру "{st.session_state.active_project_name}"...'):
-                        result = generate_structure(st.session_state.jwt_token, st.session_state.active_project_folder, 
-                                                    st.session_state.active_project_id, num_acts, selected_llm_name)
-                        # Обработка успешного ответа
-                        st.success(f"🦇 Структура успешно создана.")
-                        st.json(result) # Показать ответ от FastAPI
-                except Exception:
-                    pass  # Errors handled in api_calls
-
-        # --- Вкладка 5: Написание Сценария ---
-        with tab5:
-            #st.header("Написание Сценария")
-            st.write("Генерирует полный сценарий.")
-            selected_llm_name = st.selectbox(
-            "Выберите модель Gemini для генерации сценария:",
-            options=GEMINI_MODELS,
-            index=0,
-            key="btn6_model"
-            )
-            temperature = st.slider("Макс. Токенов для вывода:", min_value=0.6, max_value=0.9, value=0.7, key='tokens5', step=0.05)
-            if st.button("Написать Сценарий", key='btn6'):
-                try:
-                    with st.spinner(f'Пишу сценарий "{st.session_state.active_project_name}"...'):
-                        result = write_scenario(st.session_state.jwt_token, st.session_state.active_project_folder, 
-                                                st.session_state.active_project_id, 
-                                                temperature, selected_llm_name)
-                        # Обработка успешного ответа
-                        st.success(f"🦇 Сценарий успешно написан.")
-                        st.json(result) # Показать ответ от FastAPI
-                except Exception:
-                    pass  # Errors handled in api_calls
-            response = download_scenario_docx(
-                st.session_state.jwt_token,
-                st.session_state.active_project_id,
-                st.session_state.active_project_folder
-            )
-            if response:
-                st.download_button(
-                    label="Скачать сценарий",
-                    data=response,
-                    file_name="сценарий.zip",
-                    mime="application/zip"
-                )
-            

@@ -34,9 +34,3 @@ def create_user(db: Session, user: UserCreate):
 
 
 
-
-
-
-
-
-

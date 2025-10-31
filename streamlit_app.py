@@ -29,6 +29,9 @@ if 'GEMINI_MODELS' not in st.session_state:
     "gemini-2.5-pro", 
     "gemini-2.5-flash-lite",
     "gemini-2.5-nano"]
+if "file_content_editing" not in st.session_state:
+    st.session_state.file_content_editing = None
+    
 
 # --- ГЛАВНАЯ ЛОГИКА ---
 
@@ -45,6 +48,7 @@ def main():
             
             # Кнопка Главная (проекты)
             if st.button("🏠 Главная (Проекты)", key="nav_projects"):
+                st.session_state.file_content_editing = None
                 st.session_state.current_stage = "projects"
                 st.rerun()
             
@@ -53,22 +57,22 @@ def main():
             
             # Кнопки для этапов
             if st.button("📊 Этап 1: Расширение БД", key="nav_expand_db"):
+                st.session_state.file_content_editing = None
                 st.session_state.current_stage = "expand_db"
                 st.rerun()
             
             if st.button("🔍 Этап 2: Поиск Связей", key="nav_facts_search"):
+                st.session_state.file_content_editing = None
                 st.session_state.current_stage = "facts_search"
                 st.rerun()
             
-            #if st.button("✅ Этап 3: Проверка Гипотез", key="nav_facts_check"):
-            #    st.session_state.current_stage = "facts_check"
-            #    st.rerun()
-            
             if st.button("📋 Этап 4: Структура Сценария", key="nav_structure"):
+                st.session_state.file_content_editing = None
                 st.session_state.current_stage = "structure"
                 st.rerun()
             
             if st.button("✍️ Этап 5: Написание Сценария", key="nav_scenario"):
+                st.session_state.file_content_editing = None
                 st.session_state.current_stage = "scenario"
                 st.rerun()
             

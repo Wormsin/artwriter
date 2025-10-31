@@ -91,15 +91,15 @@ def find_facts(
         
         # Вызов workflow (main по умолчанию)
         if params.search_type == "main":
-             result = wrk.find_connections_main(params.folder_path, params.llm_model)
+            status, tokens = wrk.find_connections_main(params.folder_path, params.llm_model)
         else:
-             result = wrk.find_connections_secondary(params.folder_path, params.llm_model)
-        if result["status"] != "success":
-            logger.error(f"Workflow search failed for project {project_id}: {result['status']}")
-            raise HTTPException(status_code=500, detail=result["status"])
+            status, tokens = wrk.find_connections_blind_spots(params.folder_path, params.llm_model)
+        if status != "success":
+            logger.error(f"Workflow search failed for project {project_id}: {status}")
+            raise HTTPException(status_code=500, detail=status)
         
         # Обновление токенов
-        update_user_token_usage(db, current_user.user_id, result["total_tokens"])
+        update_user_token_usage(db, current_user.user_id, tokens)
         
         logger.info(f"Факты найдены для проекта {project_id} пользователем {current_user.user_id}")
         return {"status": "ok", "message": f"Facts search completed",  "user": current_user.username}
@@ -117,7 +117,7 @@ def find_facts(
 @router_llm_workflows.post("/{project_id}/facts/check", response_model=dict, status_code=status.HTTP_200_OK)
 def check_hypothesis(
     project_id: int,
-    params: WorkflowSchema,
+    params: WorkflowFactsSearchSchema,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -129,13 +129,13 @@ def check_hypothesis(
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied to this project")
         
         # Вызов workflow
-        result = wrk.check_hypotheses(params.folder_path, params.llm_model, params.search_type)
-        if result["status"] != "success":
-            logger.error(f"Workflow check failed for project {project_id} ({params.search_type}): {result['status']}")
-            raise HTTPException(status_code=500, detail=result["status"])
+        status, tokens = wrk.check_hypotheses(params.folder_path, params.llm_model, params.search_type)
+        if status != "success":
+            logger.error(f"Workflow check failed for project {project_id} ({params.search_type}): {status}")
+            raise HTTPException(status_code=500, detail=status)
         
         # Обновление токенов
-        update_user_token_usage(db, current_user.user_id, result["total_tokens"])
+        update_user_token_usage(db, current_user.user_id, tokens)
         
         logger.info(f"Гипотезы проверены ({params.search_type}) для проекта {project_id} пользователем {current_user.user_id}")
         return {"status": "ok", "message": f"Hypotheses checked successfully ({params.search_type})", "user": current_user.username}
@@ -164,17 +164,17 @@ def create_scenario_structure(
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied to this project")
         
         # Вызов workflow
-        result = wrk.build_script_structure(
+        status, tokens = wrk.build_script_structure(
             topic_path=scenario.folder_path, 
             num_series=scenario.num_series, 
             llm_model_name=scenario.llm_model
         )
-        if result["status"] != "success":
-            logger.error(f"Workflow structure failed for project {project_id}: {result['status']}")
-            raise HTTPException(status_code=500, detail=result["status"])
+        if status != "success":
+            logger.error(f"Workflow structure failed for project {project_id}: {status}")
+            raise HTTPException(status_code=500, detail=status)
         
         # Обновление токенов
-        update_user_token_usage(db, current_user.user_id, result["total_tokens"])
+        update_user_token_usage(db, current_user.user_id, tokens)
         
         logger.info(f"Структура сценария создана для проекта {project_id} пользователем {current_user.user_id}")
         return {"status": "ok", "message": f"Scenario structure created", "user": current_user.username}
@@ -205,17 +205,17 @@ def create_scenario(
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied to this project")
         
         # Вызов workflow
-        result = wrk.write_script_text(
+        status, tokens = wrk.write_script_text(
             topic_path=project.folder_path, 
             temperature=project.temperature, 
             llm_model_name=project.llm_model
         )
-        if result["status"] != "success":
-            logger.error(f"Workflow scenario failed for project {project_id}: {result['status']}")
-            raise HTTPException(status_code=500, detail=result["status"])
+        if status != "success":
+            logger.error(f"Workflow scenario failed for project {project_id}: {status}")
+            raise HTTPException(status_code=500, detail=status)
         
         # Обновление токенов
-        update_user_token_usage(db, current_user.user_id, result["total_tokens"])
+        update_user_token_usage(db, current_user.user_id, tokens)
         
         logger.info(f"Сценарий создан для проекта {project_id} пользователем {current_user.user_id}")
         return {"status": "ok", "message": f"Scenario text generated", "user": current_user.username}

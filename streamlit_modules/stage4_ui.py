@@ -27,15 +27,14 @@ def show_scenario_ui():  # Переименовал в stage5, так как э�
     # Раздел скачивания (в самом низу)
     st.divider()
     st.subheader("📥 Скачивание Сценария")
-    if st.button("Скачать ZIP Сценария"):
-        try:
-            zip_data = download_scenario_docx(st.session_state.jwt_token, st.session_state.active_project_id,
+    try:
+        zip_data = download_scenario_docx(st.session_state.jwt_token, st.session_state.active_project_id,
                                               st.session_state.active_project_folder)
-            if zip_data:
-                st.download_button("Скачать сценарий.zip", data=zip_data, file_name="scenario.zip", mime="application/zip")
-            else:
-                st.warning("Нет файлов для скачивания. Сгенерируйте сценарий сначала.")
-        except APIError as e:
+    except APIError as e:
             st.error(f"❌ Ошибка скачивания: {e.message}")
-        except Exception as e:
-            st.error(f"❌ Неожиданная ошибка: {e}")
+    except Exception as e:
+        st.error(f"❌ Неожиданная ошибка: {e}")
+    if zip_data:
+        st.download_button("Скачать сценарий.zip", data=zip_data, file_name="scenario.zip", mime="application/zip")
+    else:
+        st.warning("Нет файлов для скачивания. Сгенерируйте сценарий сначала.")

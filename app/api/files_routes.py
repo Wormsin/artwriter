@@ -156,18 +156,22 @@ def _create_zip_of_folder(target_dir: str, output_name: str) -> str:
     files = [f for f in folder_path.iterdir() if f.is_file()]
     if not files:
         return ""  # Признак отсутствия файлов
-    
+  
     # Создаём временный zip-файл
     ts = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
     tmp_zip = tempfile.NamedTemporaryFile(delete=False, prefix=f"{output_name}_{ts}_", suffix=".zip")
     tmp_zip_path = tmp_zip.name
     tmp_zip.close()
 
-    # Записываем файлы в zip
     with zipfile.ZipFile(tmp_zip_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
-        for file_path in files:
-            safe_name = file_path.name
-            zf.write(str(file_path), arcname=safe_name)
+        for filename in files:
+            # защита от path-traversal: используем только basename
+            safe_name = os.path.basename(filename)
+            abs_path = os.path.abspath(os.path.join(target_dir, safe_name))
+            # Дополнительная проверка: путь должен находиться в DOCS_DIR
+            if not abs_path.startswith(os.path.abspath(target_dir) + os.sep):
+                continue
+            zf.write(abs_path, arcname=safe_name)
 
     return tmp_zip_path
 
@@ -191,7 +195,7 @@ async def download_all(
             logger.warning(f"Отказано в скачивании сценария проекта {project_id} от {current_user.user_id}")
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied to this project")
         
-        scenario_dir = os.path.join(params.folder_path, "SCENARIO")  # Исправлено: "СЦЕНАРИЙ" -> "SCENARIO"
+        scenario_dir = os.path.join(params.folder_path, "SCENARIO") 
         zip_path = _create_zip_of_folder(scenario_dir, f"project_{project_id}_scenario")
         if not zip_path:
             logger.warning(f"Нет .docx файлов в SCENARIO для проекта {project_id}")

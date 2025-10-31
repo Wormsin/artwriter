@@ -45,7 +45,7 @@ def _make_request(method: str, url: str, jwt_token: str, payload: Optional[Dict]
     try:
         if method.upper() == "GET" and payload:
             # Для GET используем params вместо body
-            response = requests.get(url, params=payload, headers=headers)
+            response = requests.get(url, json=payload, headers=headers)
         elif files:
             # Multipart для файлов
             response = requests.post(url, data=payload if payload else {}, files=files, headers={k: v for k, v in headers.items() if k != "Content-Type"})
@@ -83,15 +83,15 @@ def expand_db(jwt_token: str, folder_path: str, project_id: int, llm_model: str)
     payload = {"folder_path": folder_path, "llm_model": llm_model}
     return _make_request("POST", f"{FASTAPI_BASE_URL}/workflow/{project_id}/facts/expand", jwt_token, payload)
 
-def find_facts(jwt_token: str, folder_path: str, project_id: int, llm_model: str) -> Dict:
+def find_facts(jwt_token: str, folder_path: str, project_id: int, llm_model: str, facts_type:str) -> Dict:
     """Ищет факты и связи."""
-    payload = {"folder_path": folder_path, "llm_model": llm_model}
+    payload = {"folder_path": folder_path, "llm_model": llm_model, "search_type": facts_type}
     return _make_request("POST", f"{FASTAPI_BASE_URL}/workflow/{project_id}/facts/search", jwt_token, payload)
 
 def check_hypothesis(jwt_token: str, folder_path: str, project_id: int, llm_model: str, facts_type: str = "main") -> Dict:
     """Проверяет гипотезы."""
-    payload = {"folder_path": folder_path, "llm_model": llm_model}
-    return _make_request("POST", f"{FASTAPI_BASE_URL}/workflow/{project_id}/facts/check", jwt_token, payload, facts_type=facts_type)  # facts_type как query param, если нужно
+    payload = {"folder_path": folder_path, "llm_model": llm_model, "search_type": facts_type}
+    return _make_request("POST", f"{FASTAPI_BASE_URL}/workflow/{project_id}/facts/check", jwt_token, payload) 
 
 def create_scenario_structure(jwt_token: str, folder_path: str, project_id: int, num_series: int, llm_model: str) -> Dict:
     """Создает структуру сценария."""
@@ -128,7 +128,7 @@ def fetch_file(jwt_token: str, stage_name: str, project_id: int, folder_path: st
     """Получает контент файла с сервера."""
     params = {"folder_path": folder_path}
     try:
-        return _make_request("GET", f"{FASTAPI_BASE_URL}/files/{project_id}/{stage_name}", jwt_token, params)
+        return _make_request("GET", f"{FASTAPI_BASE_URL}/files/{project_id}/{stage_name}", jwt_token, payload=params)
     except APIError as e:
         st.error(f"Ошибка при загрузке файла: {e}")
         return None
@@ -153,10 +153,9 @@ def download_scenario_docx(jwt_token: str, project_id: int, folder_path: str) ->
     try:
         response = requests.get(
             f"{FASTAPI_BASE_URL}/files/download/scenario/{project_id}",
-            params=params,
+            data=params,
             headers=get_protected_headers(jwt_token)
         )
-        _handle_response(response, "download scenario")  # Проверяем статус
         return response.content
     except APIError as e:
         st.error(f"Ошибка при скачивании файлов сценария: {e}")

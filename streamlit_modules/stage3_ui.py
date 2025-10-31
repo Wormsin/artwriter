@@ -1,3 +1,4 @@
+import json
 import streamlit as st
 from streamlit_modules.api_calls import (
     create_scenario_structure, fetch_file, save_file, APIError
@@ -29,21 +30,21 @@ def show_structure_ui():
     # Раздел редактирования (в самом низу)
     st.divider()
     st.subheader("✏️ Редактирование script_structure.json")
-    if st.button("Редактировать Структуру"):
-        try:
+
+    if st.session_state.file_content_editing is None:
+        if st.button("Редактировать Структуру"):
             file_data = fetch_file(st.session_state.jwt_token, "structure", st.session_state.active_project_id,
-                                   st.session_state.active_project_folder)
+                                st.session_state.active_project_folder)
             if file_data:
-                show_structure_editor(
-                    stage_name="structure",
-                    file_data=file_data,
-                    project_id=st.session_state.active_project_id,
-                    folder_path=st.session_state.active_project_folder,
-                    jwt_token=st.session_state.jwt_token
-                )
+                st.session_state.file_content_editing = file_data.get("content", "")
+                st.rerun()
             else:
-                st.warning("Структура не найдена. Сгенерируйте сначала.")
-        except APIError as e:
-            st.error(f"❌ Ошибка загрузки: {e.message}")
-        except Exception as e:
-            st.error(f"❌ Неожиданная ошибка: {e}")
+                st.warning("Файл не найден. Сначала найдите факты.")
+
+    else:
+        show_structure_editor(
+            stage_name="structure",
+            project_id=st.session_state.active_project_id,
+            folder_path=st.session_state.active_project_folder,
+            jwt_token=st.session_state.jwt_token
+        )

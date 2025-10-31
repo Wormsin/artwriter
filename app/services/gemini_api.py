@@ -49,6 +49,7 @@ def retry_on_rate_limit(func, *args, max_retries=3, **kwargs):
 def upload_files(file_paths):
     uploaded = []
     for path in file_paths:
+        path = str(path)
         if not os.path.exists(path):
             raise FileNotFoundError(f"Файл не найден: {path}")
         if path.endswith('.txt'):
@@ -63,6 +64,7 @@ def upload_files(file_paths):
 
 
 def upload_small_file(file_path):
+    file_path = str(file_path)
     if not os.path.exists(file_path):
         raise FileNotFoundError(f"Файл не найден: {file_path}")
     if file_path.endswith('.txt'):

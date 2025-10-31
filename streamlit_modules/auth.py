@@ -103,6 +103,8 @@ def handle_logout():
         del st.session_state.active_project_id
     if 'active_project_name' in st.session_state:
         del st.session_state.active_project_name
+    if 'file_content_editing' in st.session_state:
+        del st.session_state.file_content_editin
     st.success("✅ Вы вышли из системы.")
     st.rerun()
 

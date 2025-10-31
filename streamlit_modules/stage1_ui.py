@@ -1,6 +1,6 @@
 import streamlit as st
 from streamlit_modules.api_calls import expand_db, fetch_file, upload_reports_to_api, APIError
-from streamlit_modules.utils import show_default_text_editor  # Импорт общей функции редактора
+from streamlit_modules.utils import show_default_text_editor  
 
 def show_expand_db_ui():
     """UI для этапа расширения БД (Stage 1)."""
@@ -41,16 +41,21 @@ def show_expand_db_ui():
     # Раздел редактирования (в самом низу)
     st.divider()
     st.subheader("✏️ Редактирование db_extension.txt")
-    if st.button("Редактировать Файл"):
-        file_data = fetch_file(st.session_state.jwt_token, "plus_facts", st.session_state.active_project_id,
-                               st.session_state.active_project_folder)
-        if file_data:
-            show_default_text_editor(
-                stage_name="plus_facts",
-                file_data=file_data,
-                project_id=st.session_state.active_project_id,
-                folder_path=st.session_state.active_project_folder,
-                jwt_token=st.session_state.jwt_token
-            )
-        else:
-            st.warning("Файл не найден. Запустите расширение БД сначала.")
+
+    if st.session_state.file_content_editing is None:
+        if st.button("Редактировать Файл"):
+            file_data = fetch_file(st.session_state.jwt_token, "plus_facts", st.session_state.active_project_id,
+                                st.session_state.active_project_folder)
+            if file_data:
+                st.session_state.file_content_editing = file_data.get("content", "")
+                st.rerun()
+            else:
+                st.warning("Файл не найден. Запустите расширение БД сначала.")
+    else:
+        show_default_text_editor(
+            stage_name="plus_facts",
+            project_id=st.session_state.active_project_id,
+            folder_path=st.session_state.active_project_folder,
+            jwt_token=st.session_state.jwt_token
+        )
+        

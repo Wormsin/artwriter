@@ -25,13 +25,23 @@ def _handle_response(response: requests.Response, action: str) -> Dict:
     if response.status_code >= 400:
         try:
             detail = response.json()
+            server_message = detail.get("detail", f"Ошибка при {action}.")
+            if isinstance(server_message, str):
+                error_message = server_message
+            elif isinstance(server_message, list) and server_message:
+                error_message = server_message[0].get("msg", f"Ошибка при {action}.")
+            else:
+                 error_message = f"Ошибка при {action}."
+                 
         except ValueError:
+            # Если ответ не JSON
             detail = {"error": response.text}
+            error_message = response.text or f"Ошибка при {action}."
         
         if response.status_code == 401:
             raise APIError(401, "Сессия истекла. Требуется повторный вход.", detail)
         
-        raise APIError(response.status_code, f"Ошибка при {action}.", detail)
+        raise APIError(response.status_code, error_message, detail)
     
     try:
         return response.json()
@@ -140,22 +150,19 @@ def save_file(jwt_token: str, stage_name: str, project_id: int, content: str, fo
     st.success("✅ Файл успешно сохранен на сервере!")
     return result
 
-# --- 7. СПИСОК АЛГОРИТМОВ ---
-def get_algorithms(jwt_token: str, project_id: int, folder_path: str) -> List[str]:
-    """Получает список алгоритмов (ALG_* папки)."""
-    params = {"folder_path": folder_path}
-    return _make_request("GET", f"{FASTAPI_BASE_URL}/files/algorithms/{project_id}", jwt_token, params)
 
 # --- 8. СКАЧИВАНИЕ АРХИВОВ ---
+@st.cache_data(ttl=600)
 def download_scenario_docx(jwt_token: str, project_id: int, folder_path: str) -> Optional[bytes]:
     """Скачивает ZIP с .docx файлами сценария."""
     params = {"folder_path": folder_path}
     try:
         response = requests.get(
             f"{FASTAPI_BASE_URL}/files/download/scenario/{project_id}",
-            data=params,
+            json=params,
             headers=get_protected_headers(jwt_token)
         )
+        _handle_response(response, action="download zip")
         return response.content
     except APIError as e:
         st.error(f"Ошибка при скачивании файлов сценария: {e}")
@@ -164,16 +171,17 @@ def download_scenario_docx(jwt_token: str, project_id: int, folder_path: str) ->
         st.error(f"Ошибка сети при скачивании: {e}")
         return None
 
+@st.cache_data(ttl=125)
 def download_lens_zip(jwt_token: str, project_id: int, folder_path: str) -> Optional[bytes]:
     """Скачивает ZIP файлов из LENS папки."""
     params = {"folder_path": folder_path}
     try:
         response = requests.get(
             f"{FASTAPI_BASE_URL}/files/download/lens/{project_id}",
-            params=params,
+            json=params,
             headers=get_protected_headers(jwt_token)
         )
-        _handle_response(response, "download lens")
+        _handle_response(response, action="download lens zip")
         return response.content
     except APIError as e:
         st.error(f"Ошибка при скачивании LENS архива: {e}")

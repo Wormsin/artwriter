@@ -147,24 +147,23 @@ async def get_algorithms(
         logger.error(f"Ошибка получения алгоритмов для проекта {project_id}: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
-def _create_zip_of_folder(target_dir: str, output_name: str) -> str:
-    """Создает ZIP из всех  файлов в указанной папке."""
-    folder_path = Path(target_dir)
-    if not folder_path.exists():
-        return ""
+def _create_zip_of_folder(target_dir: str, files_type = ".docx") -> str:
+    # получаем список .docx в директории (только в корне, без рекурсии; можно добавить рекурсию, если нужно)
+    docs = [f for f in os.listdir(target_dir)
+            if os.path.isfile(os.path.join(target_dir, f)) and f.endswith(files_type)]
 
-    files = [f for f in folder_path.iterdir() if f.is_file()]
-    if not files:
-        return ""  # Признак отсутствия файлов
-  
+    if not docs:
+        return ""  # признак отсутствия файлов
+
     # Создаём временный zip-файл
     ts = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
-    tmp_zip = tempfile.NamedTemporaryFile(delete=False, prefix=f"{output_name}_{ts}_", suffix=".zip")
+    tmp_zip = tempfile.NamedTemporaryFile(delete=False, prefix=f"docx_archive_{ts}_", suffix=".zip")
     tmp_zip_path = tmp_zip.name
     tmp_zip.close()
 
+    # Записываем файлы в zip
     with zipfile.ZipFile(tmp_zip_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
-        for filename in files:
+        for filename in docs:
             # защита от path-traversal: используем только basename
             safe_name = os.path.basename(filename)
             abs_path = os.path.abspath(os.path.join(target_dir, safe_name))
@@ -196,7 +195,7 @@ async def download_all(
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied to this project")
         
         scenario_dir = os.path.join(params.folder_path, "SCENARIO") 
-        zip_path = _create_zip_of_folder(scenario_dir, f"project_{project_id}_scenario")
+        zip_path = _create_zip_of_folder(scenario_dir)
         if not zip_path:
             logger.warning(f"Нет .docx файлов в SCENARIO для проекта {project_id}")
             raise HTTPException(status_code=404, detail="В папке нет .docx файлов")
@@ -232,8 +231,9 @@ async def download_lens_zip(
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied to this project")
         
         lens_dir = os.path.join(params.folder_path, "FACTS/ALG_MAIN/HYP/LENS")
-        zip_path = _create_zip_of_folder(lens_dir, f"project_{project_id}_lens")
-        if not zip_path:
+        
+        zip_path = _create_zip_of_folder(lens_dir, files_type=".txt")
+        if not zip_path or not os.listdir(lens_dir):
             logger.warning(f"Папка LENS пуста или не существует для проекта {project_id}")
             raise HTTPException(status_code=404, detail="No files in LENS folder")
         
@@ -246,7 +246,8 @@ async def download_lens_zip(
             filename=filename,
             background=BackgroundTask(_remove_file, zip_path),
         )
-        
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Ошибка скачивания LENS для проекта {project_id}: {e}")
         raise HTTPException(status_code=500, detail="Internal server error during download")

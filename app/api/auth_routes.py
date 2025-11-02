@@ -37,6 +37,9 @@ def register_new_user(user: UserCreate, db: Session = Depends(get_db)):
         
         return {"message": "User registered successfully", "username": new_user.username}
     
+    except HTTPException:
+        # Пропускаем дальше — FastAPI сам обработает корректный статус
+        raise
     except SQLAlchemyError as e:
         db.rollback()  # Откат при DB-ошибке
         logger.error(f"DB ошибка при регистрации {user.username}: {e}")

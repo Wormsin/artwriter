@@ -42,6 +42,9 @@ def save_json(obj: dict | list, output_file: Path):
 def expand_database(topic_path: str, llm_model_name: str) -> Path | None:
     folder_path = Path(topic_path)
     folder_path_bd = ensure_directory(folder_path / "DB")
+    if not os.listdir(folder_path_bd) or os.listdir(folder_path_bd) == "db_extension.txt":
+        logger.error(f"Папка проекта {folder_path} пуста")
+        return "Нет загруженных файлов базы данных", None
     output_file = folder_path_bd / "db_extension.txt"
 
     file_paths = [str(file.resolve()) for file in folder_path_bd.iterdir() if file.is_file()]
@@ -55,7 +58,7 @@ def expand_database(topic_path: str, llm_model_name: str) -> Path | None:
     )
     if status != "success":
         logger.error(f"Ошибка при расширении БД: {status}")
-        return None
+        return None, None
     save_text(response, output_file)
     return status, total_tokens
 
@@ -92,6 +95,9 @@ def find_connections_main(topic_path: str, llm_model_name: str) -> Path | None:
     output_folder_lens = ensure_directory(output_folder / "LENS")
 
     folder = Path(f"{topic_path}/DB")
+    if not os.listdir(folder) or os.listdir(folder) == "db_extension.txt" or not os.path.isdir(folder):
+        logger.error(f"Папка проекта {folder} пуста или не существует")
+        return "Нет загруженных файлов базы данных", None
     file_paths = [str(file.resolve()) for file in folder.iterdir() if file.is_file()]
     uploaded_files = upload_files(file_paths)
 
@@ -132,9 +138,10 @@ def find_connections_blind_spots(topic_path: str, llm_model_name: str) -> Path |
     output_folder_lens = ensure_directory(output_folder / "LENS")
 
     folder = Path(f"{topic_path}/DB")
+    if not os.listdir(folder) or os.listdir(folder) == "db_extension.txt" or not os.path.isdir(folder):
+        logger.error(f"Папка проекта {folder} пуста или не существует")
+        return "Нет загруженных файлов базы данных", None
     file_paths = [str(file.resolve()) for file in folder.iterdir() if file.is_file()]
-    db_ext = f"{topic_path}/DB/db_extension.txt" 
-    file_paths.append(db_ext)
     uploaded_files = upload_files(file_paths)
 
     lens = 0
@@ -202,8 +209,11 @@ def check_hypotheses(topic_path: str, llm_model_name: str, facts_type: Literal["
     alg_folder = "ALG_MAIN" if facts_type == "main" else "ALG_BLIND"
     output_path = ensure_directory(Path(topic_path) / "FACTS" / alg_folder / "CHECK")  
     output_path_lens = ensure_directory(output_path / "LENS")
-    file_hypothesis = f"{topic_path}/FACTS/{alg_folder}/HYP/db_facts.txt"
-    file_paths = [file_hypothesis]
+    folder_hypothesis = f"{topic_path}/FACTS/{alg_folder}/HYP"
+    if not os.listdir(folder_hypothesis) or not os.path.isdir(folder_hypothesis):
+        logger.error(f"Папка проекта {folder_hypothesis} пуста или не существует")
+        return "Нет загруженных файлов базы данных", None
+    file_paths = [f"{folder_hypothesis}/db_facts.txt"]
     uploaded_files = upload_files(file_paths)
     
     tokens = 0
@@ -231,7 +241,7 @@ def check_hypotheses(topic_path: str, llm_model_name: str, facts_type: Literal["
     output_file = output_path / "db_facts_checked.txt"
     connect_check_hypothese_results(
         folder_lenses=output_path_lens, 
-        file_hypothesis=file_hypothesis,
+        file_hypothesis=f"{folder_hypothesis}/db_facts.txt",
         output_file=output_file
     )
     return status, tokens
@@ -245,11 +255,20 @@ def build_script_structure(topic_path: str, num_series: int, llm_model_name: str
 
     folder = Path(f"{topic_path}/DB")
     file_paths = [str(file.resolve()) for file in folder.iterdir() if file.is_file()]
-    paths_facts = glob.glob(os.path.join(f"{topic_path}/FACTS", "ALG*/CHECK/db_facts_checked.txt"))
-    file_paths.extend(paths_facts)  # Исправлено: append -> extend
+    #paths_facts = glob.glob(os.path.join(f"{topic_path}/FACTS", "ALG*/CHECK/db_facts_checked.txt"))
+    paths_facts = os.path.join(f"{topic_path}/FACTS", "ALG_MAIN/CHECK/db_facts_checked.txt")
 
+    if not os.path.isfile(paths_facts):
+        logger.error(f"Факты не проверены или не созданы {paths_facts} пуста или не существует")
+        return "Факты не проверены или не созданы", None
+    file_paths.extend(paths_facts)
+    if os.path.exists(os.path.join(f"{topic_path}/FACTS", "ALG_BLIND/HYP/db_facts.txt")):
+        blind_spots = True
+        file_paths.extend(os.path.join(f"{topic_path}/FACTS", "ALG_BLIND/HYP/db_facts.txt"))
+    else:
+        blind_spots = False
     uploaded_files = upload_files(file_paths)
-    prompt = get_stage4_prompt(num_series)
+    prompt = get_stage4_prompt(num_series, blind_spots=blind_spots)
     status, response, total_tokens = structured_call_llm(prompt, files=uploaded_files, structure=list[ScriptStructure],
                                     max_output_tokens=65536,
                                     model_name=llm_model_name,

@@ -70,6 +70,7 @@ def handle_login(username: str, password: str) -> bool:
                 token_data = response.json()
                 st.session_state.jwt_token = token_data['access_token']
                 st.session_state.authenticated = True
+                st.session_state.username = username
                 st.success("✅ Вход успешен! Перезагрузка...")
                 st.rerun()  # Перезагружаем для обновления UI
                 return True
@@ -104,9 +105,8 @@ def handle_logout():
     if 'active_project_name' in st.session_state:
         del st.session_state.active_project_name
     if 'file_content_editing' in st.session_state:
-        del st.session_state.file_content_editin
+        del st.session_state.file_content_editing
     st.success("✅ Вы вышли из системы.")
-    st.rerun()
 
 def show_auth_flow():
     """Основной flow авторизации с переключением режимов."""
@@ -133,12 +133,7 @@ def show_auth_flow():
         with st.form("login_form", clear_on_submit=True):
             login_username = st.text_input("Логин", placeholder="Введите логин", key="login_user")
             login_password = st.text_input("Пароль", type="password", placeholder="Введите пароль", key="login_pass")
-            col1, col2 = st.columns([3, 1])
-            with col1:
-                submitted = st.form_submit_button("Войти", use_container_width=True)
-            with col2:
-                if st.form_submit_button("Забыли пароль?", key="forgot", type="secondary"):
-                    st.info("Функция восстановления пароля в разработке. Обратитесь к администратору.")
+            submitted = st.form_submit_button("Войти", use_container_width=True)
             
             if submitted:
                 handle_login(login_username, login_password)
@@ -149,17 +144,7 @@ def show_auth_flow():
         with st.form("register_form", clear_on_submit=True):
             reg_username = st.text_input("Создайте логин", placeholder="Минимум 3 символа", key="reg_user")
             reg_password = st.text_input("Создайте пароль", type="password", placeholder="Минимум 6 символов", key="reg_pass")
-            col1, col2 = st.columns([3, 1])
-            with col1:
-                submitted = st.form_submit_button("Зарегистрироваться", use_container_width=True)
-            with col2:
-                if st.form_submit_button("У меня есть аккаунт", key="switch_to_login", type="secondary"):
-                    st.session_state.auth_mode = "Вход"  # Переключение через session
-                    st.rerun()
+            submitted = st.form_submit_button("Зарегистрироваться", use_container_width=True)
             
             if submitted:
                 handle_register(reg_username, reg_password)
-
-    # Инфо о сервисе
-    st.markdown("---")
-    st.info("💡 Убедитесь, что FastAPI сервер запущен на указанном URL.")

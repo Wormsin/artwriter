@@ -64,7 +64,9 @@ def expand_database(
         
         logger.info(f"База данных расширена для проекта {project_id} пользователем {current_user.user_id}")
         return {"status": "ok", "message": f"Database expanded successfully", "user": current_user.username}
-    
+    except HTTPException:
+        # Пропускаем дальше — FastAPI сам обработает корректный статус
+        raise
     except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"DB ошибка при расширении БД для проекта {project_id} от {current_user.user_id}: {e}")
@@ -104,6 +106,8 @@ def find_facts(
         logger.info(f"Факты найдены для проекта {project_id} пользователем {current_user.user_id}")
         return {"status": "ok", "message": f"Facts search completed",  "user": current_user.username}
     
+    except HTTPException:
+        raise
     except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"DB ошибка при поиске фактов для проекта {project_id} от {current_user.user_id}: {e}")
@@ -140,6 +144,8 @@ def check_hypothesis(
         logger.info(f"Гипотезы проверены ({params.search_type}) для проекта {project_id} пользователем {current_user.user_id}")
         return {"status": "ok", "message": f"Hypotheses checked successfully ({params.search_type})", "user": current_user.username}
     
+    except HTTPException:
+        raise
     except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"DB ошибка при проверке гипотез для проекта {project_id} от {current_user.user_id}: {e}")
@@ -178,7 +184,8 @@ def create_scenario_structure(
         
         logger.info(f"Структура сценария создана для проекта {project_id} пользователем {current_user.user_id}")
         return {"status": "ok", "message": f"Scenario structure created", "user": current_user.username}
-    
+    except HTTPException:
+        raise
     except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"DB ошибка при создании структуры сценария для проекта {project_id} от {current_user.user_id}: {e}")

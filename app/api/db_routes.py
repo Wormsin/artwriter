@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 from db.db import get_db
 from db.auth_security import get_current_user 
-from db.schemas import UserCreate, ProjectInitialization, ProjectShare, ProjectResponse
+from db.schemas import UserCreate, ProjectInitialization, ProjectShare, ProjectResponse, ProjectResponseWithAccess
 from db.models import User, Project
 from typing import List, Annotated
 from pathlib import Path
@@ -40,7 +40,11 @@ def create_new_project(
         new_project = create_user_project(db, project_data, owner_id=current_user.user_id)
         logger.info(f"Проект '{project_data.topic_name}' создан для пользователя {current_user.user_id} (ID: {new_project.project_id})")
         return new_project
-    
+
+
+    except ValueError as e:
+        # Если проект с таким именем уже существует, возвращаем 400 с текстом ошибки
+        raise HTTPException(status_code=400, detail=str(e))
     except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"DB ошибка при создании проекта '{project_data.topic_name}' для {current_user.user_id}: {e}")
@@ -81,7 +85,7 @@ def get_project_data(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router_db.get("/myprojects", response_model=List[ProjectResponse])
+@router_db.get("/myprojects", response_model=List[ProjectResponseWithAccess])
 def list_my_projects(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -136,6 +140,9 @@ def share_project_access(
         logger.info(f"Доступ '{share_data.permission_level}' предоставлен {target_user.username} к проекту {share_data.project_id} от {current_user.user_id}")
         return {"message": f"Access level '{share_data.permission_level}' granted to {target_user.username}.", "action": result["action"]}
     
+    except HTTPException:
+        # Пропускаем дальше — FastAPI сам обработает корректный статус
+        raise
     except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"DB ошибка при шаринге проекта {share_data.project_id} для {current_user.user_id}: {e}")

@@ -1,8 +1,6 @@
 import streamlit as st
 from streamlit_modules.api_calls import (
-    get_user_projects, create_project, expand_db, find_facts, check_hypothesis,
-    create_scenario_structure, create_scenario, upload_reports_to_api,
-    download_scenario_docx, get_algorithms, APIError, share_project_access
+    get_user_projects, create_project, APIError, share_project_access
 )
 
 
@@ -15,12 +13,12 @@ def show_main_app():
     
     st.header("Выбор или Создание Проекта")
     tab01, tab02 = st.tabs([
-        "🔮 Создание нового проекта", 
-        "⚰️ Выбор существующего проекта"
+    "⚰️ Выбор существующего проекта",
+        "🔮 Создание нового проекта" 
     ])
     
-    # --- ТАБ 1: СОЗДАНИЕ ПРОЕКТА ---
-    with tab01:
+    # --- ТАБ 2: СОЗДАНИЕ ПРОЕКТА ---
+    with tab02:
         topic_name = st.text_input("Название темы/проекта (topic_name):", value="Морские_Торговые_Пути_1917-1970")
         if st.button("Создать Проект", key='btn1_init'):
             if not st.session_state.get('jwt_token'):
@@ -34,9 +32,11 @@ def show_main_app():
                 st.session_state.active_project_folder = project_data["file_path"]
                 st.session_state.active_project_name = topic_name
                 st.session_state.active_project_id = project_data["project_id"]
-                st.success(f"🦇 Проект '{topic_name}' успешно инициализирован.")
-                st.json(project_data) # Показать ответ от FastAPI
-                
+                #st.success(f"🦇 Проект '{topic_name}' успешно инициализирован.")
+                #st.json(project_data) # Показать ответ от FastAPI
+                projects_list = None
+                get_user_projects.clear()
+                st.rerun()
             except APIError as e:
                 # Обработка API ошибок (4xx, 5xx)
                 st.error(f"🩸 Ошибка API ({e.status_code}): {e.message}")
@@ -50,8 +50,8 @@ def show_main_app():
             except Exception as e:
                  st.error(f"🩸 Произошла неизвестная ошибка: {e}")
 
-    # --- ТАБ 2: ВЫБОР ПРОЕКТА ---
-    with tab02:
+    # --- ТАБ 1: ВЫБОР ПРОЕКТА ---
+    with tab01:
         projects_list = None
         try:
             projects_list = get_user_projects(st.session_state.jwt_token)
@@ -72,30 +72,41 @@ def show_main_app():
             if not projects_list:
                 st.info("У вас пока нет ни одного проекта. Создайте новый!")
                 return
-            project_names_to_ids_folder = {p['topic_name']: [p['project_id'], p["file_path"]]  for p in projects_list}
-            project_names = list(project_names_to_ids_folder.keys())
-            
+            project_names_to_ids_folder = {f"{p['topic_name']} {p['permission_level']}": [p['project_id'], p["file_path"], p['topic_name'], p['permission_level']]  for p in projects_list}
+            projects_id = [p["project_id"] for p in projects_list]
+            project_names_with_access = list(project_names_to_ids_folder.keys())
+
+            active_project_id = st.session_state.get('active_project_id')
+
+            current_project_index = 0
+            if active_project_id and active_project_id in projects_id:
+                current_project_index = projects_id.index(active_project_id)
+        
             st.markdown("### 🕸️ Выберите Активный Проект")
-            selected_name = st.selectbox(
+            selected_box_name = st.selectbox(
                 "Доступные проекты:",
-                project_names,
-                index=0,
+                project_names_with_access,
+                index=current_project_index,
                 key="project_selector"
             )
             
-            if selected_name:
-                selected_id = project_names_to_ids_folder[selected_name][0]
-                st.session_state.active_project_folder = project_names_to_ids_folder[selected_name][1]
-                st.session_state.active_project_name = selected_name
-                st.session_state.active_project_id = selected_id # Обновляем состояние
+            if selected_box_name:
+                selected_id = project_names_to_ids_folder[selected_box_name][0]
+                selected_folder = project_names_to_ids_folder[selected_box_name][1]
+                selected_name = project_names_to_ids_folder[selected_box_name][2]
+                
+                if selected_id != active_project_id:
+                    st.session_state.active_project_folder = selected_folder
+                    st.session_state.active_project_name = selected_name
+                    st.session_state.active_project_id = selected_id 
+                    
+                    st.rerun()
             else:
                  st.session_state.active_project_folder = None
                  st.session_state.active_project_id = None
                  st.session_state.active_project_name = ""
 
-            active_project_id = st.session_state.get('active_project_id')
-            #active_project_folder = st.session_state.get('active_project_folder')
-            
+
             if active_project_id:
                 
                 # --- ФОРМА РАСШАРИВАНИЯ ПРОЕКТА ---
@@ -143,6 +154,8 @@ def show_main_app():
                             st.error(f"🩸 Ошибка данных: {e}")
             
             else:
-                st.info("Сначала выберите проект из списка или создайте новый, чтобы расшарить его.")
+              st.info("Сначала выберите проект из списка или создайте новый, чтобы расшарить его.")
+        else:
+            st.info("У вас пока нет ни одного проекта.")
      
     st.markdown("---")

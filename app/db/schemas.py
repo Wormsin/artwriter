@@ -28,6 +28,8 @@ class ProjectResponse(BaseModel):
     # Добавьте config, чтобы Pydantic мог работать с ORM
     class Config:
         from_attributes = True # (Для SQLAlchemy 2.0)
+class ProjectResponseWithAccess(ProjectResponse):
+    permission_level: str
 
 class Token(BaseModel):
     access_token: str

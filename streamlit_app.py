@@ -14,12 +14,14 @@ from streamlit_modules.stage4_ui import show_scenario_ui
 # 2. Инициализация глобального состояния (только используемые)
 if 'authenticated' not in st.session_state:
     st.session_state.authenticated = False
+if 'username' not in st.session_state:
+    st.session_state.username= None
 if 'jwt_token' not in st.session_state:
     st.session_state.jwt_token = None
 if 'active_project_id' not in st.session_state:
     st.session_state.active_project_id = None
 if 'active_project_name' not in st.session_state:
-    st.session_state.active_project_name = ""
+    st.session_state.active_project_name = None
 if 'active_project_folder' not in st.session_state:
     st.session_state.active_project_folder = None
 if 'current_stage' not in st.session_state:
@@ -27,8 +29,7 @@ if 'current_stage' not in st.session_state:
 if 'GEMINI_MODELS' not in st.session_state:
     st.session_state.GEMINI_MODELS = ["gemini-2.5-flash", 
     "gemini-2.5-pro", 
-    "gemini-2.5-flash-lite",
-    "gemini-2.5-nano"]
+    "gemini-2.5-flash-lite"]
 if "file_content_editing" not in st.session_state:
     st.session_state.file_content_editing = None
     
@@ -45,7 +46,9 @@ def main():
         # Sidebar с навигацией по этапам
         with st.sidebar:
             st.header("📋 Навигация")
-            
+
+            st.subheader(f"Username: {st.session_state.username}")
+            st.subheader(f"Active project: {st.session_state.active_project_name}")
             # Кнопка Главная (проекты)
             if st.button("🏠 Главная (Проекты)", key="nav_projects"):
                 st.session_state.file_content_editing = None

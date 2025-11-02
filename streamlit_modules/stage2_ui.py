@@ -1,13 +1,12 @@
 import streamlit as st
 from streamlit_modules.api_calls import (
-    find_facts, check_hypothesis, get_algorithms, fetch_file, APIError
+    find_facts, check_hypothesis, download_lens_zip, fetch_file, APIError
 )
 from streamlit_modules.utils import show_default_text_editor  # Импорт общей функции редактора
 
 def show_facts_ui():
     """UI для этапа поиска связей (Stage 2)."""
     st.header("⛓️ Поиск Связей (Stage 2)")
-    st.success(f"Активный проект: {st.session_state.active_project_name}")
     st.write("Ищет неочевидные связи в исторических событиях, стоит гипотезы.")
 
     # Инициализация session_state для алгоритма
@@ -26,7 +25,7 @@ def show_facts_ui():
         selected_algorithm = st.session_state.selected_algorithm
         # Выбор модели и запуск поиска
         selected_llm = st.selectbox("Модель LLM:", options=st.session_state.GEMINI_MODELS, key="search_model")
-        col1, col2 = st.columns(2)
+        col1, col2, col3 = st.columns(3)
         with col1:
             if st.button(f"🚀 Запустить Поиск ({selected_algorithm})"):
                 try:
@@ -42,18 +41,32 @@ def show_facts_ui():
                 except Exception as e:
                     st.error(f"❌ Неожиданная ошибка: {e}")
         with col2:
-            if st.button("🔍 Проверить Факты"):
+            if st.button("🔍 Проверить Факты", disabled=selected_algorithm != "MAIN"):
+                if selected_algorithm == "MAIN":
+                    try:
+                        facts_type = "main" if "MAIN" in st.session_state.selected_algorithm else "blind_spots"
+                        with st.spinner("Проверка фактов..."):
+                            result = check_hypothesis(st.session_state.jwt_token, st.session_state.active_project_folder,
+                                                    st.session_state.active_project_id, selected_llm, facts_type) 
+                        st.success("✅ Факты проверены.")
+                        st.json(result)
+                    except APIError as e:
+                        st.error(f"❌ Ошибка проверки: {e.message}")
+                    except Exception as e:
+                        st.error(f"❌ Неожиданная ошибка: {e}")
+        with col3:
+            if st.session_state.selected_algorithm == "MAIN":
                 try:
-                    facts_type = "main" if "MAIN" in st.session_state.selected_algorithm else "blind_spots"
-                    with st.spinner("Проверка фактов..."):
-                        result = check_hypothesis(st.session_state.jwt_token, st.session_state.active_project_folder,
-                                                  st.session_state.active_project_id, selected_llm, facts_type) 
-                    st.success("✅ Факты проверены.")
-                    st.json(result)
+                    zip_data = download_lens_zip(st.session_state.jwt_token, st.session_state.active_project_id,
+                                                        st.session_state.active_project_folder)
                 except APIError as e:
-                    st.error(f"❌ Ошибка проверки: {e.message}")
+                        st.error(f"❌ Ошибка скачивания: {e.message}")
                 except Exception as e:
                     st.error(f"❌ Неожиданная ошибка: {e}")
+                if zip_data:
+                    st.download_button("Скачать архив линз", data=zip_data, file_name="main_search_facts_steps.zip", mime="application/zip")
+                else:
+                    st.warning("Нет файлов для скачивания. Сгенерируйте сценарий сначала.")
 
     # Раздел редактирования и проверки (после поиска)
     st.divider()
@@ -71,7 +84,7 @@ def show_facts_ui():
         
         
         if st.session_state.file_content_editing is None:
-            if st.button("Редактировать Файл"):
+            if st.button("Редактировать Файл", disabled=st.session_state.selected_algorithm != "MAIN" and stage_name == "check_facts_blind"):
                     file_data = fetch_file(st.session_state.jwt_token, stage_name, st.session_state.active_project_id,
                                         st.session_state.active_project_folder)
                     if file_data:

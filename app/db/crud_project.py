@@ -1,7 +1,7 @@
 import os
 import shutil
 from typing import Literal, Optional, List, Dict
-from db.schemas import ProjectInitialization
+from db.schemas import ProjectInitialization, ProjectResponseWithAccess
 from db.models import Project, ProjectAccess
 from sqlalchemy.orm import Session
 from pathlib import Path
@@ -33,6 +33,15 @@ def get_project_by_id(db: Session, project_id: int) -> Optional[Project]:
 def create_user_project(db: Session, project_data: ProjectInitialization, owner_id: int):
     """Создать проект в БД и папку на диске."""
     try:
+        existing_project = db.query(Project).filter_by(
+            owner_id=owner_id,
+            topic_name=project_data.topic_name
+        ).first()
+        
+        if existing_project:
+            logger.error(f"Проект с именем '{project_data.topic_name}' уже существует для пользователя {owner_id}")
+            raise ValueError(f"Проект с именем '{project_data.topic_name}' уже существует для пользователя {owner_id}")
+        
         # 2. Создание записи в БД
         db_project = Project(
             owner_id=owner_id,
@@ -54,12 +63,12 @@ def create_user_project(db: Session, project_data: ProjectInitialization, owner_
         db_project.file_path = final_file_path
         db.commit()
         
-        # 4. Добавление владельца в права доступа (WRITE)
+        # 4. Добавление владельца в права доступа (ADMIN)
         # Владелец всегда должен иметь полный доступ
         db_access = ProjectAccess(
             project_id=db_project.project_id,
             user_id=owner_id,
-            permission_level="WRITE"
+            permission_level="ADMIN"
         )
         db.add(db_access)
         db.commit()
@@ -76,16 +85,19 @@ def get_user_accessible_projects(db: Session, user_id: int):
     """Получить список проектов, к которым у пользователя есть любой доступ."""
     try:
         # 1. Проекты, где пользователь является владельцем
-        owned_projects = db.query(Project).filter(Project.owner_id == user_id)
+        #owned_projects = db.query(Project).filter(Project.owner_id == user_id)
         
         # 2. Проекты, к которым предоставлен доступ
-        accessible_projects = db.query(Project).join(ProjectAccess).filter(
+        accessible_projects = db.query(Project, ProjectAccess.permission_level).join(ProjectAccess).filter(
             ProjectAccess.user_id == user_id
         ).distinct()
         
-        # Объединяем и убираем дубликаты
-        # Это упрощенное объединение, в SQLAlchemy можно сделать более элегантно
-        all_projects = list(set(owned_projects.all() + accessible_projects.all()))
+        all_projects = []
+        for project, perm_level in accessible_projects:
+            # Добавляем временное поле для from_orm
+            project.permission_level = perm_level
+            all_projects.append(ProjectResponseWithAccess.model_validate(project))
+        #all_projects = list(set(owned_projects.all() + accessible_projects.all()))
         logger.info(f"Пользователь {user_id} имеет доступ к {len(all_projects)} проектам")
         return all_projects
     except Exception as e:

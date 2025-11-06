@@ -47,7 +47,7 @@ def expand_database(topic_path: str, llm_model_name: str) -> Path | None:
         return "Нет загруженных файлов базы данных", None
     output_file = folder_path_bd / "db_extension.txt"
 
-    file_paths = [str(file.resolve()) for file in folder_path_bd.iterdir() if file.is_file()]
+    file_paths = [str(file.resolve()) for file in folder_path_bd.iterdir() if file.is_file() and file.stem != "db_extension"]
     uploaded_files = upload_files(file_paths)
     prompt = get_stage1_prompt()
     status, response, total_tokens = call_llm(
@@ -248,7 +248,7 @@ def check_hypotheses(topic_path: str, llm_model_name: str, facts_type: Literal["
 
 
 # --- СОЗДАНИЕ СТРУКТУРЫ СЦЕНАРИЯ ---
-def build_script_structure(topic_path: str, num_series: int, llm_model_name: str) -> Path | None:
+def build_script_structure(topic_path: str, num_series: int, llm_model_name: str):
     output_dir = ensure_directory(Path(topic_path) / "STRUCTURE")
     output_file_json = output_dir / "script_structure.json"
     output_file_txt = output_dir / "script_structure.txt"
@@ -258,15 +258,15 @@ def build_script_structure(topic_path: str, num_series: int, llm_model_name: str
     #paths_facts = glob.glob(os.path.join(f"{topic_path}/FACTS", "ALG*/CHECK/db_facts_checked.txt"))
     paths_facts = os.path.join(f"{topic_path}/FACTS", "ALG_MAIN/CHECK/db_facts_checked.txt")
 
-    if not os.path.isfile(paths_facts):
+    if not os.path.exists(paths_facts):
         logger.error(f"Факты не проверены или не созданы {paths_facts} пуста или не существует")
         return "Факты не проверены или не созданы", None
-    file_paths.extend(paths_facts)
+    file_paths.extend([str(paths_facts)])
+    blind_spots = False
     if os.path.exists(os.path.join(f"{topic_path}/FACTS", "ALG_BLIND/HYP/db_facts.txt")):
         blind_spots = True
-        file_paths.extend(os.path.join(f"{topic_path}/FACTS", "ALG_BLIND/HYP/db_facts.txt"))
-    else:
-        blind_spots = False
+        file_paths.extend([os.path.join(f"{topic_path}/FACTS", "ALG_BLIND/HYP/db_facts.txt")])
+
     uploaded_files = upload_files(file_paths)
     prompt = get_stage4_prompt(num_series, blind_spots=blind_spots)
     status, response, total_tokens = structured_call_llm(prompt, files=uploaded_files, structure=list[ScriptStructure],
@@ -383,17 +383,21 @@ def update_json_structure(topic_path: str) -> bool:
         logger.error(f"Ошибка записи в JSON файл: {e}")
         return False
 
-def write_script_text(topic_path: str, llm_model_name: str, temperature: float) -> Path | None:
+def write_script_text(topic_path: str, llm_model_name: str, temperature: float):
     if not update_json_structure(topic_path=topic_path):
         return None, 0
     
-    output_dir = ensure_directory(Path(topic_path) / "SCENARIO")
+    folder = Path(topic_path) / "SCENARIO"
+    if folder.exists():
+        shutil.rmtree(folder)
+    output_dir = ensure_directory(folder)
     output_file_json = output_dir / "scenario.json"
     
     folder_db = Path(topic_path) / "DB"
     file_paths = [str(file.resolve()) for file in folder_db.iterdir() if file.is_file()]
-    paths_facts = glob.glob(os.path.join(f"{topic_path}/FACTS", "ALG*/CHECK/db_facts_checked.txt"))
-    file_paths.extend(paths_facts)  # Исправлено: append -> extend
+    #paths_facts = glob.glob(os.path.join(f"{topic_path}/FACTS", "ALG*/CHECK/db_facts_checked.txt"))
+    paths_facts = os.path.join(f"{topic_path}/FACTS", "ALG_MAIN/CHECK/db_facts_checked.txt")
+    file_paths.extend([paths_facts])
     file_paths.append(f"{topic_path}/STRUCTURE/script_structure.txt")
     uploaded_files = upload_files(file_paths)
 

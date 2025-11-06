@@ -1,10 +1,11 @@
 import streamlit as st
 from streamlit_modules.api_calls import create_scenario, download_scenario_docx, APIError
+from streamlit_modules.auth import handle_jwt_token_expired
 
 def show_scenario_ui():  # Переименовал в stage5, так как это написание сценария (Stage 5)
+    handle_jwt_token_expired()
     """UI для этапа написания сценария (Stage 5)."""
     st.header("✍️ Написание Сценария (Stage 5)")
-    st.success(f"Активный проект: {st.session_state.active_project_name}")
     st.write("Генерирует полный текст сценария на основе структуры.")
 
     # Выбор модели и параметров
@@ -19,6 +20,7 @@ def show_scenario_ui():  # Переименовал в stage5, так как э�
                                          st.session_state.active_project_id, selected_llm, temperature)
             st.success("✅ Сценарий сгенерирован.")
             st.json(result)
+            download_scenario_docx.clear()
         except APIError as e:
             st.error(f"❌ Ошибка: {e.message}")
         except Exception as e:
@@ -35,6 +37,6 @@ def show_scenario_ui():  # Переименовал в stage5, так как э�
     except Exception as e:
         st.error(f"❌ Неожиданная ошибка: {e}")
     if zip_data:
-        st.download_button("Скачать сценарий.zip", data=zip_data, file_name="scenario.zip", mime="application/zip")
+        st.download_button("Скачать сценарий.zip", data=zip_data, file_name=f"scenario_{st.session_state.username}_{st.session_state.active_project_name}_{selected_llm}_temp{temperature}_.zip", mime="application/zip")
     else:
         st.warning("Нет файлов для скачивания. Сгенерируйте сценарий сначала.")

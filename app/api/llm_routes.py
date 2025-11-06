@@ -227,6 +227,8 @@ def create_scenario(
         logger.info(f"Сценарий создан для проекта {project_id} пользователем {current_user.user_id}")
         return {"status": "ok", "message": f"Scenario text generated", "user": current_user.username}
     
+    except HTTPException:
+        raise
     except SQLAlchemyError as e:
         db.rollback()
         logger.error(f"DB ошибка при создании сценария для проекта {project_id} от {current_user.user_id}: {e}")

@@ -1,14 +1,13 @@
 import streamlit as st
 from streamlit_modules.api_calls import (
-    get_user_projects, create_project, APIError, share_project_access
+    get_user_projects, create_project, APIError, share_project_access, delete_project
 )
+from streamlit_modules.auth import handle_jwt_token_expired
 
 
 def show_main_app():
     # Проверка аутентификации
-    if not st.session_state.get('authenticated', False) or not st.session_state.get('jwt_token'):
-        st.error("❌ Требуется авторизация. Перейдите на страницу входа.")
-        st.stop()
+    handle_jwt_token_expired()
     
     
     st.header("Выбор или Создание Проекта")
@@ -108,6 +107,57 @@ def show_main_app():
 
 
             if active_project_id:
+
+                st.markdown("---")
+                st.markdown("#### 💣 Опасная Зона: Удаление Проекта")
+                if "confirm_delete" not in st.session_state:
+                    st.session_state.confirm_delete = False
+
+                if st.button(f"Удалить Проект 💥{st.session_state.active_project_name}💥", key='btn_delete_project'):
+                    st.session_state.confirm_delete = True
+                    
+                if st.session_state.get('confirm_delete'):
+                    st.warning("⚠️ **ВНИМАНИЕ:** Вы уверены, что хотите безвозвратно удалить проект?")
+                    col_yes, col_no = st.columns(2)
+                    
+                    with col_yes:
+                        if st.button("Да, Удалить Безвозвратно", key='btn_confirm_delete_yes'):
+                            try:
+                                with st.spinner(f"Удаляю проект '{st.session_state.active_project_name}' и его папку..."):
+                                    
+                                    # Вызов API для удаления проекта
+                                    result = delete_project(
+                                        st.session_state.jwt_token,
+                                        st.session_state.active_project_id
+                                    )
+                                
+                                st.success(f"Проект '{st.session_state.active_project_name}' успешно удален! {result.get('message', '')}")
+                                
+                                # Сброс активного проекта и очистка кеша
+                                st.session_state.active_project_folder = None
+                                st.session_state.active_project_id = None
+                                st.session_state.active_project_name = ""
+                                st.session_state.confirm_delete = False
+                                projects_list = None
+                                get_user_projects.clear()
+                                st.rerun()
+                                
+                            except APIError as e:
+                                st.error(f"🩸 Ошибка: {e.message}")
+                                if e.status_code == 401:
+                                    st.session_state.authenticated = False
+                                    st.session_state.jwt_token = None
+                                    st.rerun()
+                            except ConnectionError:
+                                st.error("🩸 Ошибка соединения: Сервер FastAPI недоступен.")
+                            finally:
+                                st.session_state.confirm_delete = False # Сброс подтверждения
+
+                    with col_no:
+                        if st.button("Нет, Отменить", key='btn_confirm_delete_no'):
+                            st.session_state.confirm_delete = False
+                            st.rerun()
+            
                 
                 # --- ФОРМА РАСШАРИВАНИЯ ПРОЕКТА ---
                 st.markdown(f"#### Расшарить доступ к проекту 🖤{st.session_state.active_project_name}🖤")

@@ -1,8 +1,10 @@
 import streamlit as st
 from streamlit_modules.api_calls import expand_db, fetch_file, upload_reports_to_api, APIError
 from streamlit_modules.utils import show_default_text_editor  
+from streamlit_modules.auth import handle_jwt_token_expired
 
 def show_expand_db_ui():
+    handle_jwt_token_expired()
     """UI для этапа расширения БД (Stage 1)."""
     st.header("📊 Расширение Базы Данных (Stage 1)")
     

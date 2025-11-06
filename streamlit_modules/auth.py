@@ -95,18 +95,16 @@ def handle_login(username: str, password: str) -> bool:
             return False
 
 def handle_logout():
-    """Обработка выхода из системы."""
-    if 'jwt_token' in st.session_state:
-        del st.session_state.jwt_token
-    if 'authenticated' in st.session_state:
-        st.session_state.authenticated = False
-    if 'active_project_id' in st.session_state:
-        del st.session_state.active_project_id
-    if 'active_project_name' in st.session_state:
-        del st.session_state.active_project_name
-    if 'file_content_editing' in st.session_state:
-        del st.session_state.file_content_editing
+    st.session_state.clear()
+    st.cache_data.clear()
+    st.cache_resource.clear()
     st.success("✅ Вы вышли из системы.")
+
+def handle_jwt_token_expired():
+    if not st.session_state.get('authenticated', False) or not st.session_state.get('jwt_token'):
+        st.error("❌ Требуется авторизация. Перейдите на страницу входа.")
+        st.stop()
+
 
 def show_auth_flow():
     """Основной flow авторизации с переключением режимов."""

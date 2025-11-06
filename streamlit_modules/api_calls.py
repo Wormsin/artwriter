@@ -171,7 +171,7 @@ def download_scenario_docx(jwt_token: str, project_id: int, folder_path: str) ->
         st.error(f"Ошибка сети при скачивании: {e}")
         return None
 
-@st.cache_data(ttl=125)
+@st.cache_data(ttl=600)
 def download_lens_zip(jwt_token: str, project_id: int, folder_path: str) -> Optional[bytes]:
     """Скачивает ZIP файлов из LENS папки."""
     params = {"folder_path": folder_path}
@@ -189,3 +189,8 @@ def download_lens_zip(jwt_token: str, project_id: int, folder_path: str) -> Opti
     except requests.exceptions.RequestException as e:
         st.error(f"Ошибка сети при скачивании: {e}")
         return None
+    
+
+def delete_project(jwt_token: str, project_id: int) -> Dict:
+    """Удаляет проект и его папку."""
+    return _make_request("DELETE", f"{FASTAPI_BASE_URL}/files/project/{project_id}", jwt_token)

@@ -3,8 +3,10 @@ from streamlit_modules.api_calls import (
     find_facts, check_hypothesis, download_lens_zip, fetch_file, APIError
 )
 from streamlit_modules.utils import show_default_text_editor  # Импорт общей функции редактора
+from streamlit_modules.auth import handle_jwt_token_expired
 
 def show_facts_ui():
+    handle_jwt_token_expired()
     """UI для этапа поиска связей (Stage 2)."""
     st.header("⛓️ Поиск Связей (Stage 2)")
     st.write("Ищет неочевидные связи в исторических событиях, стоит гипотезы.")
@@ -36,6 +38,8 @@ def show_facts_ui():
                                             st.session_state.active_project_id, selected_llm, facts_type)
                     st.success("✅ Факты найдены.")
                     st.json(result)
+                    if facts_type == "main":
+                        download_lens_zip.clear()
                 except APIError as e:
                     st.error(f"❌ Ошибка поиска: {e.message}")
                 except Exception as e:
@@ -64,7 +68,7 @@ def show_facts_ui():
                 except Exception as e:
                     st.error(f"❌ Неожиданная ошибка: {e}")
                 if zip_data:
-                    st.download_button("Скачать архив линз", data=zip_data, file_name="main_search_facts_steps.zip", mime="application/zip")
+                    st.download_button("Скачать архив линз", data=zip_data, file_name=f"main_search_facts_steps_{st.session_state.username}_{st.session_state.active_project_name}_{selected_llm}_.zip", mime="application/zip")
                 else:
                     st.warning("Нет файлов для скачивания. Сгенерируйте сценарий сначала.")
 

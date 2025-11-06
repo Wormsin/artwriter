@@ -4,8 +4,10 @@ from streamlit_modules.api_calls import (
     create_scenario_structure, fetch_file, save_file, APIError
 )
 from streamlit_modules.utils import show_structure_editor  # Импорт специального редактора
+from streamlit_modules.auth import handle_jwt_token_expired
 
 def show_structure_ui():
+    handle_jwt_token_expired()
     """UI для этапа структуры сценария (Stage 4)."""
     st.header("🦴 Структура Сценария (Stage 4)")
     st.write("Генерирует структуру сценария (серии и главы).")

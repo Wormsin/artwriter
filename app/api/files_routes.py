@@ -1,9 +1,10 @@
+import shutil
 from fastapi import APIRouter, HTTPException, Depends, status
 from pathlib import Path
 from db.schemas import FileContent, FileUpdate, FileFolder
 from db.models import User
 from db.auth_security import get_current_user 
-from db.crud_project import get_access_level
+from db.crud_project import get_access_level, delete_project_data
 from sqlalchemy.orm import Session
 from db.db import get_db
 import os
@@ -14,6 +15,8 @@ from fastapi.responses import FileResponse
 from starlette.background import BackgroundTask
 from typing import List
 import logging
+from services.schemas import ScriptStructureID, ChapterStructureID
+import json
 
 # Глобальный логгер (подхватит config из main.py)
 logger = logging.getLogger(__name__)
@@ -34,6 +37,24 @@ FILE_STAGES = {
     "facts_lens_main": "FACTS/ALG_MAIN/HYP/LENS",
     "structure": "STRUCTURE/script_structure.txt"
 }
+
+def _create_template_stucture(path: Path):
+    example_script = [ScriptStructureID(
+        serie_number=1,
+        serie_name="Имя серии",
+        content=[
+            ChapterStructureID(
+                chapter_number=1,
+                chapter_name="Начало",
+                chapter_description="Главный герой просыпается и понимает, что структура сценария не написана."
+            )
+        ]
+    )]
+    path.parent.mkdir(parents=True, exist_ok=True)
+    data = [script.model_dump() for script in example_script] 
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=4)
+    logger.info(f"✅ Tamplate of script sctructure успешно создан")
 
 @router_files.get("/{project_id}/{stage_name}", response_model=FileContent)
 async def read_file_content(
@@ -61,6 +82,9 @@ async def read_file_content(
             dir_path = file_path.parent
             dir_path.mkdir(parents=True, exist_ok=True)
         
+        if not file_path.exists() and stage_name == "structure":
+            _create_template_stucture(file_path)
+
         # Если файл не существует, создаем пустой
         if not file_path.exists():
             file_path.touch()  # Создаем пустой файл
@@ -251,3 +275,44 @@ async def download_lens_zip(
     except Exception as e:
         logger.error(f"Ошибка скачивания LENS для проекта {project_id}: {e}")
         raise HTTPException(status_code=500, detail="Internal server error during download")
+    
+
+
+@router_files.delete("/project/{project_id}")
+async def delete_project_and_folder(
+    project_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Удаляет проект из БД и его папку на сервере. 
+    Требуется уровень доступа 'ADMIN' (только владелец может удалить проект).
+    """
+    
+    # 1. Проверка доступа: только владелец (ADMIN) может удалить проект
+    access_level = get_access_level(db, project_id, current_user.user_id)
+    if access_level != "ADMIN":
+        logger.warning(f"Отказано в удалении проекта {project_id} от {current_user.user_id} (уровень: {access_level})")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only the project owner (ADMIN) can delete the project.")
+
+    # 2. Удаление из БД (Project и ProjectAccess)
+    project_name, folder_path = delete_project_data(db, project_id) # Добавьте импорт этой функции
+    
+    if not project_name:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Проект с ID {project_id} не найден.")
+
+    # 3. Удаление папки проекта с сервера
+    try:
+        if folder_path and os.path.exists(folder_path):
+            shutil.rmtree(folder_path)
+            logger.info(f"Папка проекта {folder_path} удалена.")
+        else:
+            logger.warning(f"Папка проекта {folder_path} не найдена на сервере, но запись в БД удалена.")
+            
+    except OSError as e:
+        logger.error(f"Ошибка при удалении папки проекта {project_id}: {e}")
+        # Если не удалось удалить папку, все равно сообщаем об успехе в БД
+        return {"status": "warning", "message": f"Проект '{project_name}' удален из БД, но возникла ошибка при удалении папки: {e}"}
+
+    logger.info(f"Проект '{project_name}' (ID: {project_id}) полностью удален.")
+    return {"status": "success", "message": f"Проект '{project_name}' полностью удален."}

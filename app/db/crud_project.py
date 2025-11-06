@@ -181,13 +181,13 @@ def get_access_level(db: Session, project_id: int, user_id: int) -> Optional[str
     или None, если доступ не найден.
     """
     try:
-        # 1. Проверяем, является ли пользователь владельцем (Владелец всегда имеет WRITE/ADMIN)
+        # 1. Проверяем, является ли пользователь владельцем (Владелец всегда имеет ADMIN)
         project = db.query(Project).filter(Project.project_id == project_id).first()
         
         if project and project.owner_id == user_id:
             # Владелец проекта автоматически имеет наивысшие права
-            logger.debug(f"Пользователь {user_id} — владелец проекта {project_id}, доступ: WRITE")
-            return "WRITE" # Можно использовать "ADMIN", если это определено в вашей логике
+            logger.debug(f"Пользователь {user_id} — владелец проекта {project_id}, доступ: ADMIN")
+            return "ADMIN" # Можно использовать "ADMIN", если это определено в вашей логике
 
         # 2. Если не владелец, ищем запись в таблице прав доступа
         access_record = db.query(ProjectAccess).filter(
@@ -247,3 +247,25 @@ async def save_reports_to_project(
             raise Exception(f"Ошибка при сохранении файла {file.filename}: {e}")
 
     return results
+
+
+def delete_project_data(db: Session, project_id: int):
+    """
+    Удаляет проект, включая все связанные записи о доступе.
+    """
+    db.query(ProjectAccess).filter(ProjectAccess.project_id == project_id).delete(synchronize_session=False)
+    logger.info(f"Удалены записи ProjectAccess для проекта {project_id}.")
+
+    # 2. Получение и удаление самого проекта (Таблица 2)
+    project = db.query(Project).filter(Project.project_id == project_id).first()
+    if not project:
+        logger.warning(f"Проект с ID {project_id} не найден для удаления.")
+        return None, None # Возвращаем отсутствие проекта
+    
+    folder_path = project.file_path
+    
+    db.delete(project)
+    db.commit()
+    logger.info(f"Проект {project_id} удален из БД.")
+    
+    return project.topic_name, folder_path

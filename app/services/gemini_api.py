@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 import time
 import random
 from google.api_core.exceptions import ResourceExhausted
-
+import re
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +21,7 @@ client = genai.Client(api_key=GEMINI_API_KEY)
 MODEL_NAME = 'gemini-2.5-flash' 
 
 
-def retry_on_rate_limit(func, *args, max_retries=3, **kwargs):
+def retry_on_rate_limit(func, *args, max_retries=10, **kwargs):
     """
     Общая функция для обработки ошибок с ретраями для 429.
     Вызывает функцию func с аргументами и возвращает её результат.
@@ -33,17 +33,41 @@ def retry_on_rate_limit(func, *args, max_retries=3, **kwargs):
     while retries < max_retries:
         try:
             return func(*args, **kwargs)
-        except ResourceExhausted as e:
-            retries += 1
-            if retries >= max_retries:
-                logger.error(f"Достигнут лимит попыток ({max_retries}). Запрос не выполнен.")
-                raise e
-            delay = (base_delay * (2 ** (retries - 1))) + random.uniform(0, 1)
-            logger.warning(f"Ошибка 429: Лимит запросов исчерпан (Попытка {retries}/{max_retries}). Ждем {delay:.2f} секунд...")
-            time.sleep(delay)
+        
+        # Ловим ВООБЩЕ ВСЕ ошибки, чтобы проанализировать их
         except Exception as e:
-            logger.error(f"Произошла непредвиденная ошибка: {e}")
-            raise e
+            
+            # 1. Проверяем "правильный" тип (на случай, если SDK это исправит)
+            is_rate_limit_type = isinstance(e, ResourceExhausted)
+            
+            # 2. Проверяем "неправильный" тип (ловим по тексту, как в вашем логе)
+            error_text = str(e).upper()
+            is_rate_limit_text = "429" in error_text and "RESOURCE_EXHAUSTED" in error_text
+
+            # Если это ошибка 429 (любым способом)
+            if is_rate_limit_type or is_rate_limit_text:
+                retries += 1
+                if retries >= max_retries:
+                    logger.error(f"Достигнут лимит попыток ({max_retries}). Запрос не выполнен.")
+                    raise e
+                
+                delay = (base_delay * (2 ** (retries - 1))) + random.uniform(0, 1)
+                try:
+                    match = re.search(r"retryDelay': '(\d+)", str(e))
+                    if match:
+                        api_delay = int(match.group(1))
+                        delay = api_delay + random.uniform(0, 1)
+                        logger.warning(f"Ошибка 429: API запросил задержку {api_delay}с.")
+                except Exception:
+                    pass # Используем экспоненциальную задержку, если парсинг не удался
+
+                logger.warning(f"Ошибка 429 (Попытка {retries}/{max_retries}). Ждем {delay:.2f} секунд...")
+                time.sleep(delay)
+            
+            else:
+                # --- Это ДРУГАЯ ошибка (BlockedPrompt, InvalidArgument и т.д.) ---
+                logger.error(f"Произошла непредвиденная ошибка (не 429), ретрай не выполняется: {e}", exc_info=True)
+                raise e # Немедленно "поднимаем" ее
 
 
 def upload_files(file_paths):

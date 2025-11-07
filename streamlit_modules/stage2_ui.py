@@ -8,8 +8,7 @@ from streamlit_modules.auth import handle_jwt_token_expired
 def show_facts_ui():
     handle_jwt_token_expired()
     """UI для этапа поиска связей (Stage 2)."""
-    st.header("⛓️ Поиск Связей (Stage 2)")
-    st.write("Ищет неочевидные связи в исторических событиях, стоит гипотезы.")
+    st.header("⛓️ Поиск Связей", help="Ищет неочевидные связи в исторических событиях, стоит гипотезы.")
 
     # Инициализация session_state для алгоритма
     if 'selected_algorithm' not in st.session_state:
@@ -17,7 +16,7 @@ def show_facts_ui():
 
     algs = ["MAIN", "BLIND SPOTS"]
     st.session_state.selected_algorithm = st.radio(
-    "Доступные опции:",
+    "Доступные алгоритмы:",
     algs,
     index=0,  # Выбран по умолчанию первый элемент
     key="bullet_selection")
@@ -29,7 +28,7 @@ def show_facts_ui():
         selected_llm = st.selectbox("Модель LLM:", options=st.session_state.GEMINI_MODELS, key="search_model")
         col1, col2, col3 = st.columns(3)
         with col1:
-            if st.button(f"🚀 Запустить Поиск ({selected_algorithm})"):
+            if st.button(f" Запустить Поиск ({selected_algorithm})"):
                 try:
                     with st.spinner(f"Поиск связей с {selected_algorithm}..."):
                         # facts_type на основе алгоритма (ALG_MAIN -> "main", ALG_BLIND -> "blind_spots")
@@ -45,7 +44,7 @@ def show_facts_ui():
                 except Exception as e:
                     st.error(f"❌ Неожиданная ошибка: {e}")
         with col2:
-            if st.button("🔍 Проверить Факты", disabled=selected_algorithm != "MAIN"):
+            if st.button(" Проверить Факты", disabled=selected_algorithm != "MAIN"):
                 if selected_algorithm == "MAIN":
                     try:
                         facts_type = "main" if "MAIN" in st.session_state.selected_algorithm else "blind_spots"
@@ -74,21 +73,19 @@ def show_facts_ui():
 
     # Раздел редактирования и проверки (после поиска)
     st.divider()
-    st.subheader("✏️ Редактирование и Проверка")
+    st.subheader("🥀 Редактирование и Создание")
     
     if st.session_state.selected_algorithm:
         # Radio для RAW/CHECKED
-        edit_mode = st.radio("Режим редактирования:", ["RAW (Сырые Факты)", "CHECKED (Проверенные Факты)"], key="edit_mode")
-        
-        # Определение stage_name на основе алгоритма и режима
         if "MAIN" in st.session_state.selected_algorithm:
-            stage_name = "interesting_facts_main" if edit_mode == "RAW (Сырые Факты)" else "check_facts_main"
+            edit_mode = st.radio("Режим редактирования:", ["Сырые Факты", "Проверенные Факты"], key="edit_mode")
+            stage_name = "interesting_facts_main" if edit_mode == "Сырые Факты" else "check_facts_main"
         else:
-            stage_name = "interesting_facts_blind" if edit_mode == "RAW (Сырые Факты)" else "check_facts_blind"
+            stage_name = "interesting_facts_blind"
         
         
         if st.session_state.file_content_editing is None:
-            if st.button("Редактировать Файл", disabled=st.session_state.selected_algorithm != "MAIN" and stage_name == "check_facts_blind"):
+            if st.button("Редактировать Файл"):
                     file_data = fetch_file(st.session_state.jwt_token, stage_name, st.session_state.active_project_id,
                                         st.session_state.active_project_folder)
                     if file_data:

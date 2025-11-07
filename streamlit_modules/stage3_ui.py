@@ -9,14 +9,13 @@ from streamlit_modules.auth import handle_jwt_token_expired
 def show_structure_ui():
     handle_jwt_token_expired()
     """UI для этапа структуры сценария (Stage 4)."""
-    st.header("🦴 Структура Сценария (Stage 4)")
-    st.write("Генерирует структуру сценария (серии и главы).")
+    st.header("🦴 Структура Сценария", help="Генерирует структуру сценария (серии и главы).")
 
     # Выбор модели и параметров
     selected_llm = st.selectbox("Модель LLM:", options=st.session_state.GEMINI_MODELS, key="struct_model")
     num_series = st.number_input("Количество серий:", min_value=1, max_value=10, value=3, step=1)
 
-    if st.button("🚀 Сгенерировать Структуру"):
+    if st.button(" Сгенерировать Структуру"):
         try:
             with st.spinner("Генерация структуры..."):
                 result = create_scenario_structure(st.session_state.jwt_token, st.session_state.active_project_folder,
@@ -30,10 +29,10 @@ def show_structure_ui():
 
     # Раздел редактирования (в самом низу)
     st.divider()
-    st.subheader("✏️ Редактирование script_structure.json")
+    st.subheader("🥀 Редактирование или Создание структуры")
 
     if st.session_state.file_content_editing is None:
-        if st.button("Редактировать Структуру"):
+        if st.button("Структура"):
             file_data = fetch_file(st.session_state.jwt_token, "structure", st.session_state.active_project_id,
                                 st.session_state.active_project_folder)
             if file_data:

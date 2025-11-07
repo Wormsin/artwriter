@@ -123,10 +123,11 @@ def show_auth_flow():
         return  # Выходим, если уже logged in
     
     # Переключение между входом и регистрацией
-    auth_mode = st.radio("Выберите действие:", ("Вход", "Регистрация"), horizontal=True, key="auth_mode")
+    auth_mode = st.radio("Выберите режим:", ("Вход", "Регистрация"), horizontal=True, key="auth_mode", label_visibility='collapsed')
+    
 
     if auth_mode == "Вход":
-        st.header("🔑 Вход в систему")
+        st.header("🪤 Вход")
         
         with st.form("login_form", clear_on_submit=True):
             login_username = st.text_input("Логин", placeholder="Введите логин", key="login_user")
@@ -137,7 +138,7 @@ def show_auth_flow():
                 handle_login(login_username, login_password)
 
     else:
-        st.header("📝 Регистрация")
+        st.header("🩻 Регистрация")
         
         with st.form("register_form", clear_on_submit=True):
             reg_username = st.text_input("Создайте логин", placeholder="Минимум 3 символа", key="reg_user")

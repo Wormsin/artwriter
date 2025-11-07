@@ -7,7 +7,7 @@ import uuid
 
 def show_default_text_editor(stage_name: str, project_id: int, folder_path: str, jwt_token: str):
     """Общий текстовый редактор для этапов (TXT файлы)."""
-    st.subheader(f"Редактирование: {stage_name}")
+    st.info(f"Редактирование: {stage_name}")
     
     edited_content = st.text_area(
         "Контент (TXT):",
@@ -18,7 +18,7 @@ def show_default_text_editor(stage_name: str, project_id: int, folder_path: str,
     
     col1, col2 = st.columns(2)
     with col1:
-        if st.button("💾 Сохранить", type="primary", key=f"save_{stage_name}"):
+        if st.button("💣 Сохранить", type="primary", key=f"save_{stage_name}"):
             try:
                 result = save_file(jwt_token, stage_name, project_id, edited_content, folder_path)
                 st.success("✅ Изменения сохранены.")
@@ -38,7 +38,7 @@ def show_default_text_editor(stage_name: str, project_id: int, folder_path: str,
 # --- Специальный редактор для JSON структуры (для Stage 4, если нужно) ---
 def show_structure_editor(stage_name: str,  project_id: int, folder_path: str, jwt_token: str):
     """Расширенный редактор для JSON-структуры сценария."""
-    st.subheader(f"Редактирование JSON: {stage_name}")
+    st.info(f"Редактирование JSON: {stage_name}")
     
     try:
         data = json.loads(st.session_state.file_content_editing)

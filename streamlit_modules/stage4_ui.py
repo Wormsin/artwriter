@@ -5,15 +5,14 @@ from streamlit_modules.auth import handle_jwt_token_expired
 def show_scenario_ui():  # Переименовал в stage5, так как это написание сценария (Stage 5)
     handle_jwt_token_expired()
     """UI для этапа написания сценария (Stage 5)."""
-    st.header("✍️ Написание Сценария (Stage 5)")
-    st.write("Генерирует полный текст сценария на основе структуры.")
+    st.header("🚬 Написание Сценария", help="Генерирует полный текст сценария на основе структуры.")
 
     # Выбор модели и параметров
     selected_llm = st.selectbox("Модель LLM:", options=st.session_state.GEMINI_MODELS, key="scenario_model")
     temperature = st.slider("Температура (креативность):", min_value=0.6, max_value=1.5, value=1.0, step=0.1, 
                             help="Низкая — более предсказуемо, высокая — креативнее.")
 
-    if st.button("🚀 Написать Сценарий"):
+    if st.button(" Написать Сценарий"):
         try:
             with st.spinner("Генерация сценария..."):
                 result = create_scenario(st.session_state.jwt_token, st.session_state.active_project_folder,
@@ -28,7 +27,7 @@ def show_scenario_ui():  # Переименовал в stage5, так как э�
 
     # Раздел скачивания (в самом низу)
     st.divider()
-    st.subheader("📥 Скачивание Сценария")
+    st.subheader("💌 Скачать Сценарий")
     try:
         zip_data = download_scenario_docx(st.session_state.jwt_token, st.session_state.active_project_id,
                                               st.session_state.active_project_folder)

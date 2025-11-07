@@ -41,40 +41,40 @@ def main():
     
     # Условное отображение
     if st.session_state.authenticated:
-        st.title("📓 ARTwriter")
 
         # Sidebar с навигацией по этапам
         with st.sidebar:
-            st.header("📋 Навигация")
+            st.title("♚ Навигация")
 
             st.subheader(f"Username: {st.session_state.username}")
             st.subheader(f"Active project: {st.session_state.active_project_name}")
             # Кнопка Главная (проекты)
-            if st.button("🏠 Главная (Проекты)", key="nav_projects"):
+            st.markdown("---")
+            if st.button("🏩 Главная ", key="nav_projects"):
                 st.session_state.file_content_editing = None
                 st.session_state.current_stage = "projects"
                 st.rerun()
             
-            st.markdown("---")
-            st.header("Этапы Workflow")
+            #st.markdown("---")
+            st.header("♘ Этапы Workflow")
             
             # Кнопки для этапов
-            if st.button("📊 Этап 1: Расширение БД", key="nav_expand_db"):
+            if st.button("😵 Этап 1: Расширение БД", key="nav_expand_db"):
                 st.session_state.file_content_editing = None
                 st.session_state.current_stage = "expand_db"
                 st.rerun()
             
-            if st.button("🔍 Этап 2: Поиск Связей", key="nav_facts_search"):
+            if st.button("⛓️ Этап 2: Поиск Связей", key="nav_facts_search"):
                 st.session_state.file_content_editing = None
                 st.session_state.current_stage = "facts_search"
                 st.rerun()
             
-            if st.button("📋 Этап 4: Структура Сценария", key="nav_structure"):
+            if st.button("🦴 Этап 3: Структура Сценария", key="nav_structure"):
                 st.session_state.file_content_editing = None
                 st.session_state.current_stage = "structure"
                 st.rerun()
             
-            if st.button("✍️ Этап 5: Написание Сценария", key="nav_scenario"):
+            if st.button("🚬 Этап 4: Написание Сценария", key="nav_scenario"):
                 st.session_state.file_content_editing = None
                 st.session_state.current_stage = "scenario"
                 st.rerun()

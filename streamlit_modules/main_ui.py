@@ -8,9 +8,8 @@ from streamlit_modules.auth import handle_jwt_token_expired
 def show_main_app():
     # Проверка аутентификации
     handle_jwt_token_expired()
+    st.title("📓 ARTwriter")
     
-    
-    st.header("Выбор или Создание Проекта")
     tab01, tab02 = st.tabs([
     "⚰️ Выбор существующего проекта",
         "🔮 Создание нового проекта" 
@@ -18,7 +17,7 @@ def show_main_app():
     
     # --- ТАБ 2: СОЗДАНИЕ ПРОЕКТА ---
     with tab02:
-        topic_name = st.text_input("Название темы/проекта (topic_name):", value="Морские_Торговые_Пути_1917-1970")
+        topic_name = st.text_input("Название темы/проекта:", value="Морские_Торговые_Пути_1917-1970")
         if st.button("Создать Проект", key='btn1_init'):
             if not st.session_state.get('jwt_token'):
                  st.error("Отсутствует токен. Пожалуйста, выполните вход.")
@@ -83,10 +82,11 @@ def show_main_app():
         
             st.markdown("### 🕸️ Выберите Активный Проект")
             selected_box_name = st.selectbox(
-                "Доступные проекты:",
+                "Доступные проекты",
                 project_names_with_access,
                 index=current_project_index,
-                key="project_selector"
+                key="project_selector",
+                label_visibility='collapsed'
             )
             
             if selected_box_name:
@@ -109,11 +109,11 @@ def show_main_app():
             if active_project_id:
 
                 st.markdown("---")
-                st.markdown("#### 💣 Опасная Зона: Удаление Проекта")
+                #st.markdown("#### 💣 Удаление Проекта")
                 if "confirm_delete" not in st.session_state:
                     st.session_state.confirm_delete = False
 
-                if st.button(f"Удалить Проект 💥{st.session_state.active_project_name}💥", key='btn_delete_project'):
+                if st.button(f"Удалить Проект 💥 {st.session_state.active_project_name}", key='btn_delete_project'):
                     st.session_state.confirm_delete = True
                     
                 if st.session_state.get('confirm_delete'):
@@ -158,9 +158,9 @@ def show_main_app():
                             st.session_state.confirm_delete = False
                             st.rerun()
             
-                
+                st.markdown("---")
                 # --- ФОРМА РАСШАРИВАНИЯ ПРОЕКТА ---
-                st.markdown(f"#### Расшарить доступ к проекту 🖤{st.session_state.active_project_name}🖤")
+                st.markdown(f"#### Расшарить доступ к проекту 🖤 {st.session_state.active_project_name}")
                 
                 with st.form("share_project_form", clear_on_submit=True):
                     user_name = st.text_input(
@@ -208,4 +208,3 @@ def show_main_app():
         else:
             st.info("У вас пока нет ни одного проекта.")
      
-    st.markdown("---")

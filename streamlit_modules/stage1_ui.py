@@ -6,7 +6,7 @@ from streamlit_modules.auth import handle_jwt_token_expired
 def show_expand_db_ui():
     handle_jwt_token_expired()
     """UI для этапа расширения БД (Stage 1)."""
-    st.header("📊 Расширение Базы Данных (Stage 1)")
+    st.header("😵 Расширение Базы Данных", help="Доплняет фактами имеющиеся исторические отчеты")
     
     # Загрузка файлов для отчета
     uploaded_files = st.file_uploader("Загрузите отчеты (PDF/TXT):", accept_multiple_files=True, type=["pdf", "txt"])
@@ -28,7 +28,7 @@ def show_expand_db_ui():
     
     # Выбор модели и запуск workflow
     selected_llm = st.selectbox("Модель LLM:", options=st.session_state.GEMINI_MODELS, key="expand_model")
-    if st.button("🚀 Расширить БД"):
+    if st.button(" Расширить БД"):
         try:
             with st.spinner("Расширение БД..."):
                 result = expand_db(st.session_state.jwt_token, st.session_state.active_project_folder,
@@ -42,7 +42,7 @@ def show_expand_db_ui():
     
     # Раздел редактирования (в самом низу)
     st.divider()
-    st.subheader("✏️ Редактирование db_extension.txt")
+    st.subheader("🥀 Редактирование найденных фактов")
 
     if st.session_state.file_content_editing is None:
         if st.button("Редактировать Файл"):

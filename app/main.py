@@ -8,7 +8,9 @@ from api import disk_routes, llm_routes, auth_routes, db_routes, files_routes
 from dotenv import load_dotenv
 
 LOG_DIR = Path("logs")
+DATA_DIR = Path("projects_root")
 LOG_DIR.mkdir(exist_ok=True)
+DATA_DIR.mkdir(exist_ok=True)
 
 # Конфигурация логирования для продакшена (dictConfig)
 LOGGING_CONFIG = {
@@ -93,5 +95,5 @@ def read_root():
     return {"status": "ok", "message": "Welcome to the API"}
 
 
-if __name__=="__main__":
-    uvicorn.run(app = "main:app", reload=True)
+#if __name__=="__main__":
+#    uvicorn.run(app = "main:app", reload=True)

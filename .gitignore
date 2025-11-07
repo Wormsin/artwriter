@@ -4,6 +4,6 @@ __pycache__
 */
 !app/
 !app/**
-!streamlit_modules/
-!streamlit_modules/**
+!streamlit_app/
+!streamlit_app/**
 **/__pycache__/

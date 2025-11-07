@@ -8,7 +8,11 @@ logger = logging.getLogger(__name__)
 
 
 # DATABASE_URL можно вынести в .env для безопасности
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:1234@localhost:5432/postgres")
+DATABASE_URL = os.getenv("DATABASE_URL")
+
+if not DATABASE_URL:
+    # Возможно, тут ты можешь поставить заглушку для локальной разработки без Docker
+    raise Exception("DATABASE_URL не настроен.")
 
 try:
     engine = create_engine(DATABASE_URL, echo=False)  # echo=True для debug в dev

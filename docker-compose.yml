@@ -1,0 +1,63 @@
+# /my_project/docker-compose.yml
+
+version: '3.11.13' # Указываем версию синтаксиса
+
+services:
+  # --- СЕРВИС API (FastAPI) ---
+  api:
+    build: ./app  # Указываем Docker, где искать Dockerfile для этого сервиса
+    container_name: fast-api-service
+    env_file:
+      - .env      # Подключаем твой .env файл с ключами
+    ports:
+      - "8000:8000" # Пробрасываем порт: <порт_на_сервере>:<порт_в_контейнере>
+    volumes:
+      - ./app:/app  # (Для разработки) Синхронизирует код, чтобы не пересобирать контейнер
+                    # при каждом изменении кода. Для production можно убрать.
+      # Пробрасываем папку root_projects с сервера
+      # в папку /app/data внутри контейнера
+      - ./projects_root:/projects_root
+      
+      # Пробрасываем папку logs с сервера
+      # в папку /app/logs внутри контейнера
+      - ./logs:/logs
+    depends_on:
+      - db
+    environment:
+      # DATABASE_URL будет переопределена или добавлена
+      # Имя хоста (хоста БД) должно быть именем сервиса — 'db'
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+
+  db:
+    image: postgres:14-alpine # Используем официальный, легковесный образ PostgreSQL
+    container_name: postgres-db
+    restart: always           # Важно: перезапускать контейнер, если он упадет
+    # НОВЫЙ ПАРАМЕТР: Секция environment для настройки PostgreSQL
+    environment:
+      # БД возьмет эти переменные, чтобы создать БД, пользователя и пароль
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      # Пробрасываем порт только если тебе нужен внешний доступ (например, для DBeaver).
+      # Для работы API это не обязательно.
+      - "5432:5432"
+    volumes:
+      # Важно: Это сохранит твои данные БД на сервере, даже если контейнер удалится
+      - postgres_data:/var/lib/postgresql/data
+
+  # --- СЕРВИС ИНТЕРФЕЙСА (Streamlit) ---
+  frontend:
+    build: ./streamlit_app # Указываем путь к Dockerfile для Streamlit
+    container_name: streamlit-service
+    env_file:
+      - .env      # Streamlit тоже может понадобиться .env (например, для URL API)
+    ports:
+      - "8501:8501" # Пробрасываем порт Streamlit
+    volumes:
+      - ./streamlit_app:/app # (Для разработки)
+    depends_on:
+      - api         # Говорим, что frontend должен запускаться ПОСЛЕ того, как запустится api
+
+volumes:
+  postgres_data:

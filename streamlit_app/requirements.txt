@@ -1,0 +1,29 @@
+# requirements.txt для Streamlit (frontend/)
+
+streamlit==1.50.0
+requests==2.32.5       # Для HTTP-запросов к твоему FastAPI
+python-dotenv==1.1.1 # Для чтения .env файла (например, с URL API)
+
+# --- Библиотеки для отображения данных (из твоего списка) ---
+# Оставь только те, что ты реально используешь в Streamlit
+altair==5.5.0
+pandas==2.3.3
+numpy==2.3.3
+pyarrow==21.0.0        # Для оптимизации работы pandas в Streamlit
+pillow==11.3.0         # Если используешь st.image
+pydeck==0.9.1          # Если используешь st.pydeck_chart
+
+# --- Основные зависимости Streamlit и его под-библиотек ---
+blinker==1.9.0
+click==8.2.1
+GitPython==3.1.45
+packaging==25.0
+protobuf==5.29.5
+python-dateutil==2.9.0.post0
+pytz==2025.2
+six==1.17.0
+tenacity==9.1.2
+toml==0.10.2
+typing_extensions==4.15.0
+tzdata==2025.2
+watchdog==6.0.0

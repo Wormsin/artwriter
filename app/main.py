@@ -6,9 +6,10 @@ import uvicorn
 from db.db import Base, engine
 from api import disk_routes, llm_routes, auth_routes, db_routes, files_routes
 from dotenv import load_dotenv
+import os
 
-LOG_DIR = Path("logs")
-DATA_DIR = Path("projects_root")
+LOG_DIR = Path(os.getenv("LOG_PATH_CONTAINER", "logs"))
+DATA_DIR = Path(os.getenv("DATA_PATH_CONTAINER", "projects_root"))
 LOG_DIR.mkdir(exist_ok=True)
 DATA_DIR.mkdir(exist_ok=True)
 

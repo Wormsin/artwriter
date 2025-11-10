@@ -22,7 +22,8 @@ services:
       # в папку /app/logs внутри контейнера
       - ./logs:/logs
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     environment:
       # DATABASE_URL будет переопределена или добавлена
       # Имя хоста (хоста БД) должно быть именем сервиса — 'db'
@@ -41,10 +42,18 @@ services:
     ports:
       # Пробрасываем порт только если тебе нужен внешний доступ (например, для DBeaver).
       # Для работы API это не обязательно.
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       # Важно: Это сохранит твои данные БД на сервере, даже если контейнер удалится
       - postgres_data:/var/lib/postgresql/data
+    # Healthcheck будет проверять, готова ли БД
+    healthcheck:
+      # Команда pg_isready — это утилита Postgres для проверки статуса
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s   # Проверять каждые 5 секунд
+      timeout: 5s    # Ждать ответа 5 секунд
+      retries: 5     # Попробовать 5 раз (всего 25 секунд)
+    # ---------------------------
 
   # --- СЕРВИС ИНТЕРФЕЙСА (Streamlit) ---
   frontend:

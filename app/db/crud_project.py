@@ -10,7 +10,8 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-PROJECTS_ROOT_DIR = "projects_root"
+
+PROJECTS_ROOT_DIR = Path(os.getenv("DATA_PATH_CONTAINER", "projects_root"))
 PermissionLevel = Literal['READ', 'WRITE', 'ADMIN']
 
 def get_project_by_id(db: Session, project_id: int) -> Optional[Project]:

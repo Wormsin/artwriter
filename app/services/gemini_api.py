@@ -43,9 +43,10 @@ def retry_on_rate_limit(func, *args, max_retries=10, **kwargs):
             # 2. Проверяем "неправильный" тип (ловим по тексту, как в вашем логе)
             error_text = str(e).upper()
             is_rate_limit_text = "429" in error_text and "RESOURCE_EXHAUSTED" in error_text
+            is_unavailable_error= "503" in error_text and "UNAVAILABLE" in error_text
 
             # Если это ошибка 429 (любым способом)
-            if is_rate_limit_type or is_rate_limit_text:
+            if is_rate_limit_type or is_rate_limit_text or is_unavailable_error:
                 retries += 1
                 if retries >= max_retries:
                     logger.error(f"Достигнут лимит попыток ({max_retries}). Запрос не выполнен.")
@@ -57,11 +58,18 @@ def retry_on_rate_limit(func, *args, max_retries=10, **kwargs):
                     if match:
                         api_delay = int(match.group(1))
                         delay = api_delay + random.uniform(0, 1)
-                        logger.warning(f"Ошибка 429: API запросил задержку {api_delay}с.")
+                        if  is_rate_limit_type or is_rate_limit_text:
+                            logger.warning(f"Ошибка 429: API запросил задержку {api_delay}с.")
+                        else:
+                            logger.warning(f"Ошибка 503: API запросил задержку {api_delay}с.")
                 except Exception:
                     pass # Используем экспоненциальную задержку, если парсинг не удался
+                
+                if  is_rate_limit_type or is_rate_limit_text:
+                    logger.warning(f"Ошибка 429 (Попытка {retries}/{max_retries}). Ждем {delay:.2f} секунд...")
+                elif is_unavailable_error:
+                    logger.warning(f"Ошибка 503 (Попытка {retries}/{max_retries}). Ждем {delay:.2f} секунд...")
 
-                logger.warning(f"Ошибка 429 (Попытка {retries}/{max_retries}). Ждем {delay:.2f} секунд...")
                 time.sleep(delay)
             
             else:

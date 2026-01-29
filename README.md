@@ -9,6 +9,6 @@
 
 An app for creating complicated multi-steps scenarious for documentary movies.
 
-</div>
-
 ![Screen Recording 2026-01-26 001843](https://github.com/user-attachments/assets/ab48352a-6786-4067-bf1f-5febb001dcc1)
+
+</div>
